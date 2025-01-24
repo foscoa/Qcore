@@ -11,7 +11,7 @@ import statsmodels.api as sm
 
 # File URL
 # Read as if it's a CSV
-cot_data = pd.read_csv("COT_data/FinFutYY_2024.txt", delimiter=",")
+cot_data = pd.read_csv("FinFutYY_2024.txt", delimiter=",")
 
 # query only one COT
 # cot_data = cot_data.query("As_of_Date_In_Form_YYMMDD == 241217")

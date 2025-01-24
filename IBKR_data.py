@@ -4,6 +4,9 @@ from ibapi.contract import Contract
 import pandas as pd
 import threading
 import time
+import numpy as np
+from scipy.stats import linregress
+import plotly.graph_objects as go
 
 
 class IBApi(EWrapper, EClient):
@@ -45,21 +48,21 @@ if __name__ == "__main__":
 
     # Create a contract for E-mini S&P 500 futures
     contract = Contract()
-    contract.symbol = "CT"  # Symbol for E-mini S&P 500 futures
+    contract.symbol = "CC"  # Symbol for E-mini S&P 500 futures
     contract.secType = "FUT"  # Futures security type
     contract.exchange = "NYBOT"  # CME's GLOBEX exchange
     contract.currency = "USD"  # Currency in USD
     contract.lastTradeDateOrContractMonth = "202503"  # Expiry in January 2025 (yyyy-mm)
     contract.strike = 0.0  # Futures contracts do not have a strike price
-    contract.multiplier = 50000  # Multiplier for E-mini S&P 500 futures (e.g., 50)
+    contract.multiplier = 10  # Multiplier for E-mini S&P 500 futures (e.g., 50)
 
     # Step 5: Request historical data
     app.reqHistoricalData(
         reqId=1,                     # Unique ID for the request
         contract=contract,           # The contract object
-        endDateTime="20250116 14:20:00 US/Eastern",              # End time ("" = current time)
-        durationStr="1 D",           # Duration (e.g., "1 D" = 1 day)
-        barSizeSetting="1 min",      # Granularity (e.g., "1 min", "5 mins")
+        endDateTime="",# End time ("" = current time)
+        durationStr="180 D",           # Duration (e.g., "1 D" = 1 day)
+        barSizeSetting="1 day",      # Granularity (e.g., "1 min", "5 mins")
         whatToShow="TRADES",         # Data type: "TRADES", "BID", etc.
         useRTH=1,                    # Regular Trading Hours only
         formatDate=1,                # Date format: 1 = human-readable, 2 = UNIX
@@ -83,3 +86,104 @@ if __name__ == "__main__":
 
     # Disconnect and clean up
     app.disconnect()
+
+    lookback = 5 * 25
+    df.index = pd.to_datetime(df.date, format='%Y%m%d')
+    data = df
+
+    """
+    Detect a triangle pattern in stock price data.
+
+    Parameters:
+        data (pd.DataFrame): Stock price data with 'high' and 'low' columns.
+        lookback (int): Number of data points to consider for the pattern.
+
+    Returns:
+        bool: True if a triangle pattern is detected, False otherwise.
+        dict: A dictionary containing support and resistance trendlines.
+    """
+    # Extract the relevant data
+    highs = data['high'][-lookback:].reset_index(drop=True)
+    lows = data['low'][-lookback:].reset_index(drop=True)
+    x = np.arange(len(highs))
+
+    # Fit trendlines
+    res_slope, res_intercept, _, _, _ = linregress(x, highs)
+    sup_slope, sup_intercept, _, _, _ = linregress(x, lows)
+
+    # Compute the trendlines
+    resistance = res_slope * x + res_intercept
+    support = sup_slope * x + sup_intercept
+
+    # Ensure the data has 'high' and 'low' columns
+    if 'high' not in data.columns or 'low' not in data.columns:
+        raise ValueError("The input data must contain 'high' and 'low' columns.")
+
+    # Create a candlestick chart using Plotly
+    fig = go.Figure(data=[go.Candlestick(
+        x=data.index,
+        open=data['open'],
+        high=data['high'],
+        low=data['low'],
+        close=data['close'],
+        increasing_line_color='green',
+        decreasing_line_color='red'
+    )])
+
+    # Customize the layout with a black background
+    fig.update_layout(
+        title=f"Candlestick Chart for {contract.symbol}",
+        xaxis_title="Date",
+        yaxis_title="Price (USD)",
+        xaxis_rangeslider_visible=False,  # Hide the range slider
+        template="plotly_dark",  # Dark theme
+        plot_bgcolor="black",  # Plot background color
+        paper_bgcolor="black",  # Overall figure background color
+        font=dict(color="white")  # Font color to contrast with black
+    )
+
+    # Add dynamic support line (linear regression on low prices)
+    # fig.add_trace(go.Scatter(
+    #     x=data.index[-lookback:],
+    #     y=support + data.low[-lookback:].min() - support[
+    #         int(np.where(data.low[-lookback:] == data.low[-lookback:].min())[0])],
+    #     mode="lines",
+    #     line=dict(color="white", width=2, dash="dash"),
+    #     name="Support (Trend)"
+    # ))
+
+    c = 0
+    for i in range(1):
+
+        val = np.sort(data.low[-lookback:])[i]
+
+        c += val - support[int(np.where(data.low[-lookback:] == val)[0][0])]
+
+    s = support + c/(i+1)
+
+    # Add a horizontal line at y=150 (example)
+    fig.add_shape(
+        type="line",
+        x0=data.index[-lookback:][0],  # Start at the first date
+        x1=data.index[-lookback:][-1],  # End at the last date
+        y0=s[0],  # Y position of the line
+        y1=s[-1],  # Y position of the line (same for horizontal line)
+        line=dict(color="white", width=1),
+    )
+
+    m = resistance + data.high[-lookback:].max() - resistance[
+            int(np.where(data.high[-lookback:] == data.high[-lookback:].max())[0])]
+
+    # Add dynamic resistance line (linear regression on high prices)
+    # Add a horizontal line at y=150 (example)
+    fig.add_shape(
+        type="line",
+        x0=data.index[-lookback:][0],  # Start at the first date
+        x1=data.index[-lookback:][-1],  # End at the last date
+        y0=m[0],  # Y position of the line
+        y1=m[-1],  # Y position of the line (same for horizontal line)
+        line=dict(color="white", width=1),
+    )
+
+    # Show the plot
+    fig.show()
