@@ -32,6 +32,17 @@ def run_loop():
 
 if __name__ == "__main__":
     # Step 1: Create an instance of the IBApi class
+
+    # Define file path
+    file_path = ".\\futures_contract_specs.csv"  # Update with your file location
+
+    # Read the CSV file
+    fut_specs = pd.read_csv(file_path).to_dict(orient='records')
+
+    # Create a contract for E-mini S&P 500 futures
+
+    fut = [i for i in fut_specs if i['symbol']=='CT'][0]
+
     app = IBApi()
 
     # Step 2: Connect to TWS or IB Gateway
@@ -43,18 +54,14 @@ if __name__ == "__main__":
 
     time.sleep(1)  # Give the connection some time to establish
 
-    # Step 4: Define the contract for the stock
-    from ibapi.contract import Contract
-
-    # Create a contract for E-mini S&P 500 futures
     contract = Contract()
-    contract.symbol = "CC"  # Symbol for E-mini S&P 500 futures
-    contract.secType = "FUT"  # Futures security type
-    contract.exchange = "NYBOT"  # CME's GLOBEX exchange
-    contract.currency = "USD"  # Currency in USD
-    contract.lastTradeDateOrContractMonth = "202503"  # Expiry in January 2025 (yyyy-mm)
-    contract.strike = 0.0  # Futures contracts do not have a strike price
-    contract.multiplier = 10  # Multiplier for E-mini S&P 500 futures (e.g., 50)
+    contract.symbol = fut['symbol']  # Symbol for E-mini S&P 500 futures
+    contract.secType = fut['secType']  # Futures security type
+    contract.exchange = fut['exchange']  # CME's GLOBEX exchange
+    contract.currency = fut['currency']  # Currency in USD
+    contract.lastTradeDateOrContractMonth = fut['lastTradeDateOrContractMonth']  # Expiry in January 2025 (yyyy-mm)
+    contract.strike = fut['strike']  # Futures contracts do not have a strike price
+    contract.multiplier = fut['multiplier']  # Multiplier for E-mini S&P 500 futures (e.g., 50)
 
     # Step 5: Request historical data
     app.reqHistoricalData(
