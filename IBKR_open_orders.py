@@ -23,6 +23,9 @@ class IBapi(EWrapper, EClient):
         self.reqPositions()  # Request all open positions
 
     def openOrder(self, orderId, contract, order, orderState):
+
+        self.reqContractDetails(order.permId, contract)
+
         """ Callback method that receives open orders. """
         order_data = {
             "Perm ID": order.permId,
@@ -42,23 +45,29 @@ class IBapi(EWrapper, EClient):
         print(f"Received Order: {order_data}")  # Debugging output
 
         # Request contract details to get longName, linked by permId
-        if order.permId not in self.contract_details_map:  # Avoid duplicate requests
-            self.reqContractDetails(order.permId, contract)
+        if contract.conId not in self.contract_details_map:  # Avoid duplicate requests
+            self.reqContractDetails(contract.conId, contract)
 
     def execDetails(self, reqId, contract, execution):
         """ Called when trade execution details are received. """
         trade_data = {
-            "Execution ID": execution.execId,
-            "Order ID": execution.orderId,
+            "Execution_ID": execution.execId,
             "Account": execution.acctNumber,
+            "Execution_Time": execution.time,
+            "Permanent_ID": execution.permId,
+            "CondId": contract.conId,
             "Symbol": contract.symbol,
             "Sec Type": contract.secType,
             "Exchange": execution.exchange,
             "Action": execution.side,  # BUY/SELL
             "Quantity": execution.shares,
             "Price": execution.price,
-            "Execution Time": execution.time,
-            "Permanent ID": execution.permId
+            "CumQty_filled": execution.cumQty,
+            "Avg_Price":execution.avgPrice,
+            "OrderRef":execution.orderRef,
+            "Market_rule_ID":execution.evRule,
+            "Multiplier":execution.evMultiplier,
+
         }
         self.trades_list.append(trade_data)
         print(f"Received Execution: {trade_data}")  # Debugging output
@@ -70,6 +79,7 @@ class IBapi(EWrapper, EClient):
             "Symbol": contract.symbol,
             "Sec Type": contract.secType,
             "Exchange": contract.exchange,
+            "CondId": contract.conId,
             "Position": position,  # Positive for long, negative for short
             "Avg Cost": avgCost
         }
@@ -114,5 +124,7 @@ df_positions = pd.DataFrame(app.positions_list)
 
 # Disconnect after fetching data
 app.disconnect()
+
+filled_executions = trade_orders.groupby('CumQty_filled').max()
 
 
