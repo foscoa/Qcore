@@ -13,6 +13,7 @@ class IBapi(EWrapper, EClient):
         self.orders_list = []  # List to store order data
         self.trades_list = []  # List to store executed trades
         self.positions_list = []  # List to store position data
+        self.contract_details_map = {}  # Map permId -> longName
 
     def nextValidId(self, orderId):
         """ IBKR assigns a valid order ID when connected. """
@@ -24,7 +25,7 @@ class IBapi(EWrapper, EClient):
     def openOrder(self, orderId, contract, order, orderState):
         """ Callback method that receives open orders. """
         order_data = {
-            "Order ID": orderId,
+            "Perm ID": order.permId,
             "Account": order.account,  # Important for subaccounts!
             "Symbol": contract.symbol,
             "Sec Type": contract.secType,
@@ -33,10 +34,16 @@ class IBapi(EWrapper, EClient):
             "Quantity": order.totalQuantity,
             "Order Type": order.orderType,
             "Price": order.lmtPrice ,# if order.orderType in ["LMT", "STP"] else "Market",
-            "Status": orderState.status
+            "Status": orderState.status,
+            "CondId": contract.conId,
+            "Long Name": "Fetching..."  # Placeholder
         }
         self.orders_list.append(order_data)
         print(f"Received Order: {order_data}")  # Debugging output
+
+        # Request contract details to get longName, linked by permId
+        if order.permId not in self.contract_details_map:  # Avoid duplicate requests
+            self.reqContractDetails(order.permId, contract)
 
     def execDetails(self, reqId, contract, execution):
         """ Called when trade execution details are received. """
@@ -67,6 +74,23 @@ class IBapi(EWrapper, EClient):
             "Avg Cost": avgCost
         }
         self.positions_list.append(position_data)
+
+
+    def contractDetails(self, reqId, contractDetails):
+        """ Called when contract details are received. """
+        longName = contractDetails.longName
+        permId = reqId  # We requested it using permId, so reqId == permId
+
+        # Store contract longName in a dictionary using permId as key
+        self.contract_details_map[permId] = longName
+
+        # Update existing orders with the correct name
+        for order in self.orders_list:
+            if order["Perm ID"] == permId:
+                order["Long Name"] = longName
+
+        print(f"Received Contract Details: {contractDetails.contract.symbol} - {longName}")
+
 
     def openOrderEnd(self):
         """ Triggered when all open orders are received. """
