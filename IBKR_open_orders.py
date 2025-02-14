@@ -74,17 +74,27 @@ class IBapi(EWrapper, EClient):
 
     def position(self, account, contract, position, avgCost):
         """ Called when an open position is received. """
+        base_currency = "USD"
+        fx_rate = self.get_fx_rate_ibkr(base_currency, contract.currency)  # Fetch dynamically
+        multiplier = float(contract.multiplier) if contract.multiplier else 1.0
+
+        # Calculate notional exposure
+        notional_exposure = position * multiplier * avgCost * fx_rate
+
         position_data = {
-            "Account": account,  # Important for subaccounts!
+            "Account": account,
             "Symbol": contract.symbol,
             "Sec Type": contract.secType,
             "Exchange": contract.exchange,
             "CondId": contract.conId,
-            "Position": position,  # Positive for long, negative for short
-            "Avg Cost": avgCost
+            "Multiplier": multiplier,
+            "Currency": contract.currency,
+            "Position": position,
+            "Avg Cost": avgCost,
+            "Notional Exposure": notional_exposure
         }
         self.positions_list.append(position_data)
-
+        print(f"Processed Position: {position_data}")
 
     def contractDetails(self, reqId, contractDetails):
         """ Called when contract details are received. """
@@ -118,13 +128,11 @@ api_thread.start()
 time.sleep(3)
 
 # Convert collected orders to a DataFrame
-df_orders = pd.DataFrame(app.orders_list)
-trade_orders = pd.DataFrame(app.trades_list)
-df_positions = pd.DataFrame(app.positions_list)
+open_orders = pd.DataFrame(app.orders_list)
+trades = pd.DataFrame(app.trades_list)
+open_positions = pd.DataFrame(app.positions_list)
 
 # Disconnect after fetching data
 app.disconnect()
 
-filled_executions = trade_orders.groupby('CumQty_filled').max()
-
-
+#
