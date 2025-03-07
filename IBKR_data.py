@@ -69,7 +69,7 @@ if __name__ == "__main__":
         contract=contract,           # The contract object
         endDateTime="",# End time ("" = current time)
         durationStr="180 D",           # Duration (e.g., "1 D" = 1 day)
-        barSizeSetting="1 day",      # Granularity (e.g., "1 min", "5 mins")
+        barSizeSetting="1 hour",      # Granularity (e.g., "1 min", "5 mins")
         whatToShow="TRADES",         # Data type: "TRADES", "BID", etc.
         useRTH=1,                    # Regular Trading Hours only
         formatDate=1,                # Date format: 1 = human-readable, 2 = UNIX
@@ -91,9 +91,12 @@ if __name__ == "__main__":
     } for bar in app.data])
     print(df)
 
+    # df.set_index("date", inplace=True)
+
     # Disconnect and clean up
     app.disconnect()
 
+def pattern_dectetor():
     lookback = 5 * 25
     df.index = pd.to_datetime(df.date, format='%Y%m%d')
     data = df
@@ -194,3 +197,58 @@ if __name__ == "__main__":
 
     # Show the plot
     fig.show()
+
+ct = df.copy()
+ct.set_index("date", inplace=True)
+ct = ct.query("date > '20241201 00:00:00'")
+
+# markov
+# Compute price changes
+ct["returns"] = ct["close"].pct_change()  # Percentage change in price
+ct.dropna(inplace=True)
+
+def get_state(returns, threshold=0.00):  # 0.2% threshold
+    if returns > threshold:
+        return "Up"
+    elif returns < -threshold:
+        return "Down"
+    else:
+        return "Stable"
+
+ct["state"] = ct["returns"].apply(lambda x: get_state(x))
+
+from collections import Counter
+
+
+transitions = list(zip(ct["state"], ct["state"][1:]))
+
+# Compute transition probabilities
+states = ["Up", "Down", "Stable"]
+transition_matrix = pd.DataFrame(index=states, columns=states).fillna(0)
+
+import pandas_ta as ta
+import numpy as np
+
+# Calculate RSI (Relative Strength Index)
+ct["rsi"] = ct.ta.rsi(length=14)
+
+# Moving Averages
+ct["sma_50"] = ct.ta.sma(length=50)
+ct["sma_200"] = ct.ta.sma(length=200)
+
+# MACD (Moving Average Convergence Divergence)
+macd = ct.ta.macd(fast=12, slow=26, signal=9)
+ct["macd"] = macd["MACD_12_26_9"]
+ct["macd_signal"] = macd["MACDs_12_26_9"]
+
+# Bollinger Bands
+bb = ct.ta.bbands(length=20)
+ct["bb_upper"] = bb["BBU_20_2.0"]
+ct["bb_lower"] = bb["BBL_20_2.0"]
+
+# ATR (Average True Range - Measures Volatility)
+ct["atr"] = ct.ta.atr(length=14)
+
+
+
+
