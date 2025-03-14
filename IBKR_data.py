@@ -7,6 +7,8 @@ import time
 import numpy as np
 from scipy.stats import linregress
 import plotly.graph_objects as go
+import plotly.io as pio
+pio.renderers.default = "browser"
 
 
 class IBApi(EWrapper, EClient):
@@ -200,55 +202,91 @@ def pattern_dectetor():
 
 ct = df.copy()
 ct.set_index("date", inplace=True)
-ct = ct.query("date > '20241201 00:00:00'")
+#ct = ct.query("date > '20241201 00:00:00'")
 
 # markov
-# Compute price changes
-ct["returns"] = ct["close"].pct_change()  # Percentage change in price
+
+from hmmlearn.hmm import GaussianHMM
+# Compute log returns
+ct["log_returns"] = np.log(ct.close / ct.close.shift(1))
+
+# Compute rolling volatility (10-hour window)
+ct["volatility"] = ct.log_returns.rolling(10).std()
+
+# Drop NaN values
 ct.dropna(inplace=True)
 
-def get_state(returns, threshold=0.00):  # 0.2% threshold
-    if returns > threshold:
-        return "Up"
-    elif returns < -threshold:
-        return "Down"
-    else:
-        return "Stable"
+from hmmlearn.hmm import GaussianHMM
 
-ct["state"] = ct["returns"].apply(lambda x: get_state(x))
+# Prepare feature matrix (returns, volatility, volume)
+X = np.column_stack([ct.log_returns, ct.volatility, ct.volume])
 
-from collections import Counter
+# Split into Train (80%) and Test (20%)
+train_size = int(len(X) * 0.8)
+X_train, X_test = X[:train_size], X[train_size:]
 
+# Train the HMM on training data
+hmm = GaussianHMM(n_components=3, covariance_type="full", n_iter=1000)
+hmm.fit(X_train)
 
-transitions = list(zip(ct["state"], ct["state"][1:]))
+# Predict hidden states on Test Data
+test_hidden_states = hmm.predict(X_test)
 
-# Compute transition probabilities
-states = ["Up", "Down", "Stable"]
-transition_matrix = pd.DataFrame(index=states, columns=states).fillna(0)
+# Store predictions
+ct.loc[ct.index[train_size:], "Regime"] = test_hidden_states
 
-import pandas_ta as ta
-import numpy as np
+# Assign colors for regimes
+regime_colors = {0: "blue", 1: "red", 2: "green"}
 
-# Calculate RSI (Relative Strength Index)
-ct["rsi"] = ct.ta.rsi(length=14)
+# Create subplots: (1) Price + Regimes, (2) Log Returns + Regimes
+from plotly.subplots import make_subplots
+fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                    vertical_spacing=0.1, subplot_titles=("Cotton Futures Price", "Log Returns"))
 
-# Moving Averages
-ct["sma_50"] = ct.ta.sma(length=50)
-ct["sma_200"] = ct.ta.sma(length=200)
+# --- 📈 Add price plot (Top) ---
+fig.add_trace(go.Scatter(
+    x=ct.index[train_size:],
+    y=ct["close"].iloc[train_size:],
+    mode="lines",
+    name="Cotton Futures Price",
+    line=dict(color="black")
+), row=1, col=1)
 
-# MACD (Moving Average Convergence Divergence)
-macd = ct.ta.macd(fast=12, slow=26, signal=9)
-ct["macd"] = macd["MACD_12_26_9"]
-ct["macd_signal"] = macd["MACDs_12_26_9"]
+# Add scatter points for each regime (Price)
+for regime, color in regime_colors.items():
+    regime_data = ct[ct["Regime"] == regime]
+    fig.add_trace(go.Scatter(
+        x=regime_data.index,
+        y=regime_data["close"],
+        mode="markers",
+        name=f"Regime {regime}",
+        marker=dict(color=color, size=6, opacity=0.7)
+    ), row=1, col=1)
 
-# Bollinger Bands
-bb = ct.ta.bbands(length=20)
-ct["bb_upper"] = bb["BBU_20_2.0"]
-ct["bb_lower"] = bb["BBL_20_2.0"]
+# --- 📉 Add returns plot (Bottom) ---
+for regime, color in regime_colors.items():
+    regime_data = ct[ct["Regime"] == regime]
+    fig.add_trace(go.Scatter(
+        x=regime_data.index,
+        y=regime_data["log_returns"],
+        mode="markers",
+        name=f"Regime {regime} Returns",
+        marker=dict(color=color, size=6, opacity=0.7)
+    ), row=2, col=1)
 
-# ATR (Average True Range - Measures Volatility)
-ct["atr"] = ct.ta.atr(length=14)
+# Customize layout
+fig.update_layout(
+    title="Market Regimes in Cotton Futures (Price & Returns)",
+    xaxis2_title="Date",  # X-axis for bottom plot
+    yaxis1_title="Price",  # Y-axis for top plot
+    yaxis2_title="Log Returns",  # Y-axis for bottom plot
+    legend_title="Market Regime",
+    template="plotly_dark",
+    height=800
+)
 
+# Show plot
+fig.show()
 
 
 
