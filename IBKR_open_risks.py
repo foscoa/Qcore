@@ -1,11 +1,153 @@
 from ib_insync import *
 import pandas as pd
+import numpy as np
 
 from IBKR_open_orders import open_positions
 
 # Connect to IBKR Gateway or TWS
 ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
+
+def get_realized_PnL():
+    # Define the file path
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03272025.csv"
+    # Read the CSV file
+    df = pd.read_csv(file_path)
+    df.columns = df.columns.str.replace("/", "_", regex=False)
+
+    master_df = df.copy().query(
+        'LevelOfDetail == "EXECUTION" & (Open_CloseIndicator == "C" or Open_CloseIndicator == "O")')
+
+    # clean DateTime
+    # Remove single quotes and replace ";" with a space
+    clean_date = master_df.DateTime.str.replace(";", " ")
+
+    # Convert to datetime in CET timezone
+    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format="%Y%m%d %H%M%S").dt.tz_localize(
+        'America/New_York').dt.tz_convert('Europe/Berlin').dt.tz_localize(None)
+
+    # Sort by Time
+    master_df = master_df.copy().sort_values(by='DateTime_clean', ascending=False)
+
+    # Adding FifoPnlRealzed in Base Currency
+    master_df['FifoPnlRealizedToBase'] = master_df.FifoPnlRealized * master_df.FXRateToBase
+
+    # Adding NotionaltoBase
+    master_df[
+        'NotionaltoBase'] = master_df.Quantity.abs() * master_df.Multiplier * master_df.FXRateToBase * master_df.TradePrice
+
+    # Direction
+    master_df['Position'] = master_df.Buy_Sell.map({'SELL': 'SHORT', 'BUY': 'LONG'})
+
+    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv',
+                                 header=0,
+                                 index_col=0)
+    # Mapping Symbol
+    master_df['Name'] = master_df.UnderlyingSymbol.map(symbol_mapping.name.to_dict())
+    master_df['Asset Class'] = master_df.UnderlyingSymbol.map(symbol_mapping.assetClass.to_dict())
+
+    # Display the first few rows
+    # Define the aggregation dictionary
+    agg_dict_IBOrderID = {
+        # **Categorical Columns**: Keep the first non-null occurrence (assuming they are the same within a group)
+        'ClientAccountID': 'first',
+        'CurrencyPrimary': 'first',
+        'Symbol': 'first',
+        'Description': 'first',
+        'Conid': 'first',
+        'SecurityID': 'first',
+        'ListingExchange': 'first',
+        'TradeID': lambda x: ', '.join(x.astype(str).unique()),  # Keep all unique TradeIDs
+        'Multiplier': 'first',
+        'Strike': 'first',
+        'Expiry': 'first',
+        'Put_Call': 'first',
+        'TradeDate': 'first',
+        'TransactionID': 'first',
+        'IBExecID': lambda x: ', '.join(x.astype(str).unique()),  # Keep unique executions
+        'OrderTime': lambda x: ', '.join(x.astype(str).unique()),  # Keep unique executions
+        'FXRateToBase': 'mean',  # Weighted average trade price,  # Averaging the FX rate makes sense
+        'AssetClass': 'first',
+        'Name': 'first',
+        'Asset Class': 'first',
+        'SubCategory': 'first',
+        'ISIN': 'first',
+        'FIGI': 'first',
+        'UnderlyingConid': 'first',
+        'UnderlyingSymbol': 'first',
+        'UnderlyingSecurityID': 'first',
+        'UnderlyingListingExchange': 'first',
+        'Issuer': 'first',
+        'IssuerCountryCode': 'first',
+        'ReportDate': 'first',
+        'DateTime': 'first',
+        'SettleDateTarget': 'first',
+        'TransactionType': 'first',
+        'Exchange': 'first',
+        'Open_CloseIndicator': 'first',
+        'Notes_Codes': 'first',
+        'Buy_Sell': 'first',
+        'BrokerageOrderID': 'first',
+        'ExtExecID': 'first',
+        'OpenDateTime': 'first',
+        'HoldingPeriodDateTime': 'first',
+        'LevelOfDetail': 'first',
+        'OrderType': 'first',
+        'DateTime_clean': 'first',
+        'Position': 'first',
+
+        # **Numerical Columns**: Use appropriate aggregations
+        'Quantity': 'sum',  # Sum of traded quantities
+        'TradePrice': 'mean',  # ,  # Weighted average trade price
+        'IBCommission': 'sum',  # Total commission paid
+        'CostBasis': 'sum',  # Aggregate cost basis
+        'NotionaltoBase': 'sum',  # Aggregate cost basis to base
+        'FifoPnlRealized': 'sum',  # Realized profit and loss
+        'FifoPnlRealizedToBase': 'sum',  # Realized PnL converted to base currency
+        'TradeMoney': 'sum',  # Total trade money
+        'Proceeds': 'sum',  # Total proceeds
+        'NetCash': 'sum',  # Net cash impact
+        'ClosePrice': 'mean',
+    }  # Average closing price
+
+    aggregated_df = master_df.copy().groupby(['IBOrderID']).agg(agg_dict_IBOrderID).reset_index().sort_values(
+        by='DateTime_clean',
+        ascending=True)
+    filter_df = aggregated_df[[
+        # Basic Trade Information
+        'DateTime_clean',
+        'Symbol',
+        'Description',
+        'Name',
+
+        # Trade Metrics
+        'Quantity',
+        'TradePrice',
+        'NotionaltoBase',
+        'FifoPnlRealizedToBase',
+        'Multiplier',
+
+        # Financial Instrument Information
+        'Asset Class',
+        'AssetClass',
+        'CurrencyPrimary',
+        'FXRateToBase',
+        'Open_CloseIndicator',
+        'Position',
+
+        # Transaction Details
+        'IBOrderID',
+        'Conid',
+        'Exchange',
+    ]]
+
+    # open quantity
+    open_q = filter_df.groupby('Conid', as_index=False)['Quantity'].sum()
+    open_conid = list(open_q.query('Quantity != 0').Conid)
+    open_filter_df = filter_df.query('Conid in @open_conid')
+
+    return  open_filter_df
+open_rzld_pnl = get_realized_PnL()
 
 # Fetch open positions
 positions = ib.positions()
@@ -46,6 +188,21 @@ orders_df = pd.DataFrame([
     } for trade in trades if trade.order  # Ensure order exists
 ])
 
+portfolio = ib.portfolio()
+portfolio_df = pd.DataFrame([
+    {
+        'ConID': pos.contract.conId,
+        'Symbol': pos.contract.symbol,
+        'Position': pos.position,
+        'Unrealized PnL': pos.unrealizedPNL,
+        'Realized PnL': pos.realizedPNL, # Directly from IBKR!
+        'Market Price': pos.marketPrice,
+
+    } for pos in portfolio
+])
+
+# print(portfolio_df)
+
 # Net Liquidation Value
 account_summary = ib.accountSummary()
 # Convert to DataFrame
@@ -61,11 +218,18 @@ risk_df = positions_df.merge(orders_df, on=['ConID', 'Symbol', 'Local Symbol',
                                             'SecType', 'Exchange', 'Currency', 'Multiplier'],
                                         how='outer', suffixes=('_Position', '_Order'))
 
+symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv',
+                                 header=0,
+                                 index_col=0)
+
+risk_df['Name'] = risk_df.Symbol.map(symbol_mapping.name.to_dict())
+risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
+
 def positionsHistPrices(df, durationStr, barSizeSetting):
     # Define a dictionary to store the close prices
     close_prices_dict = {}
 
-    for conid in df['ConID'].unique():# Define contract using ConID (e.g., AAPL: 265598)
+    for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
 
         conid = int(conid)
         exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
@@ -133,12 +297,21 @@ risk_df = addBaseCCYfx(risk_df, 'EUR')
 contracts_MM = [11625311, 74991935, 281534370, 568953593]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
+risk_df = risk_df.copy().query("SecType not in 'CASH'")
+
+
+nans_lastPX_Ids = {120552103: '91.40'}
+defect_ids = list(nans_lastPX_Ids.keys())
+
+contracts_quoted_USd = {526262864: 100,
+                        565301283: 100}
+
 def addLastPX(df):
     # Fetch FX conversion rates to base currency
-    LastPX = {}
+    LastPX = nans_lastPX_Ids
     LastPX_time = {}
 
-    for conid in df['ConID'].unique():# Define contract using ConID (e.g., AAPL: 265598)
+    for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
 
         conid = int(conid)
         exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
@@ -148,8 +321,8 @@ def addLastPX(df):
         bars = ib.reqHistoricalData(
             contract,
             endDateTime='',        # '' means the latest available data
-            durationStr='1 D',     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
-            barSizeSetting='1 min',  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
+            durationStr='1 Y',     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
+            barSizeSetting='1 day',  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
             whatToShow='MIDPOINT',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
             useRTH=False,           # Regular Trading Hours only
             formatDate=1
@@ -168,15 +341,43 @@ ts = positionsHistPrices(df = risk_df, durationStr= '1 Y', barSizeSetting= '1 da
 ts_ret = ts.copy().pct_change().dropna()
 corr = ts_ret.corr()
 
-last_risk = pd.DataFrame(columns=['Status','Symbol', 'Local Symbol', 'Currency', 'Contracts',
-                                  'Risk (EUR)', 'Risk NLV (bps)', 'Exposure (EUR)', 'Expos. NLV (%)', 'FX', 'multiplier',
-                                  'Last Price', 'ConID'])
+risk_df.replace('', np.nan, inplace=True)
+risk_df['Multiplier'] = risk_df.Multiplier.fillna(1)
+
+last_risk = pd.DataFrame(columns=[
+        'Status',
+        'Currency',
+        'FX',
+        'Symbol',
+        'Local Symbol',
+        'Name',
+        'Asset Class',
+        'Position',
+        'Contracts',
+        'Risk (EUR)',
+        'Risk NLV (bps)',
+        'Rlzd PnL (EUR)',
+        'UnRlzd PnL (EUR)',
+        'Exposure (EUR)',  # Scalar wrapped in list
+        'Expos. NLV (%)',
+        'multiplier',  # Scalar wrapped in list
+        'Last Price',  # Scalar wrapped in list
+        'ConID' # Scalar wrapped in list
+    ])
+
+df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 
 for conid in risk_df['ConID'].unique():
 
+    # adjust for prices quoted in USd (cents)
+    if conid in contracts_quoted_USd.keys():
+        div = contracts_quoted_USd[conid]
+    else:
+        div = 1
+
     sub_df = risk_df.copy().query('ConID == @conid')
 
-    multiplier = int(sub_df.Multiplier.unique()[0])
+    multiplier = int(sub_df.Multiplier.unique()[0])/div
     lastPX = float(sub_df.LastPX.unique()[0])
     fx = float(sub_df['FX Rate to Base'].unique()[0])
 
@@ -188,6 +389,9 @@ for conid in risk_df['ConID'].unique():
     if position_status == "open":
         open_position = sub_df.Position.dropna().sum()
         exposure = open_position * multiplier * lastPX / fx
+        rlzd_PnL = df_open_rzld_pnl[conid] + portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]
+        unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]
+
 
         if open_position > 0: # long
             stops = sub_df[(sub_df["Stop Price"] < lastPX) & (sub_df["Limit Price"] < lastPX)].copy()
@@ -195,6 +399,7 @@ for conid in risk_df['ConID'].unique():
             stops = sub_df[(sub_df["Stop Price"] > lastPX) & (sub_df["Limit Price"] > lastPX)].copy()
 
         stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
+        position = sub_df['Position'].dropna().apply(lambda x: 'LONG' if x > 0 else ('SHORT' if x < 0 else 'neutral')).values[0]
         stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price'] + stops['Limit Price']) / fx
         risk = exposure - stops_exec_exp.sum()
 
@@ -202,20 +407,36 @@ for conid in risk_df['ConID'].unique():
     elif position_status == "working":
         exposure = 0
         open_position = 0
+        rlzd_PnL = 0
+        unrlzd_PnL = 0
+        max_STP = sub_df.loc[sub_df['Stop Price'].idxmax()]
+
+        if max_STP['Stop Price'] - max_STP['LastPX'] > 0:
+            position = 'LONG'
+        else:
+            position = 'SHORT'
+
+        sub_df = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
         sub_df['dir'] = sub_df['Action'].map({'SELL': -1, 'BUY': 1})
+
         risk = (sub_df.Quantity * multiplier * (sub_df['Stop Price'] + sub_df['Limit Price']) * sub_df.dir).sum() / fx
 
     new_row = pd.DataFrame(data={
         'Status': [position_status],
+        'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+        'FX': [fx],  # Scalar wrapped in list
         'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
         'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
-        'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+        'Name': [sub_df.Name.unique()[0]],
+        'Asset Class': [sub_df['Asset Class'].unique()[0]],
+        'Position': [position],
         'Contracts': [open_position],  # Scalar wrapped in list
         'Risk (EUR)': [risk],  # Scalar wrapped in list
         'Risk NLV (bps)':[(risk/NLV) *10000],
+        'Rlzd PnL (EUR)':[rlzd_PnL],
+        'UnRlzd PnL (EUR)':[unrlzd_PnL],
         'Exposure (EUR)': [exposure],  # Scalar wrapped in list
         'Expos. NLV (%)': [exposure/NLV*100],
-        'FX': [fx],  # Scalar wrapped in list
         'multiplier': [multiplier],  # Scalar wrapped in list
         'Last Price': [lastPX],  # Scalar wrapped in list
         'ConID': [conid]  # Scalar wrapped in list
@@ -224,6 +445,7 @@ for conid in risk_df['ConID'].unique():
     last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
 last_risk.to_csv("Q_Pareto_Transaction_History/Data/open_risks.csv")
+corr.to_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv")
 
 # Disconnect from IBKR
 ib.disconnect()

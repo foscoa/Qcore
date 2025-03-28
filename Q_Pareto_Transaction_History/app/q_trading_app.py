@@ -2,6 +2,7 @@ import dash
 from dash import dcc, html, dash_table, Input, Output, State
 import pandas as pd
 import plotly.express as px
+import plotly.figure_factory as ff
 import os
 import numpy as np
 from dash.dash_table.Format import Format, Scheme, Sign, Group
@@ -10,7 +11,7 @@ from ib_insync import *
 
 asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03142025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03272025.csv"
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -18,8 +19,10 @@ app.title = "Q - PT Trading Overview"
 
 # Sample DataFrames
 def get_sample_data():
-
     return pd.read_csv("Q_Pareto_Transaction_History/Data/open_risks.csv", index_col=0)
+
+def get_corr_matrix():
+    return pd.read_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv", index_col=0)
 
 def get_journal_data_old(file_path):
     """
@@ -154,7 +157,6 @@ def get_journal_data_old(file_path):
         'Exchange',
     ]]
 
-
     def aggregator(df_toBeGrouped):
 
         df_aggregated = pd.DataFrame(columns=np.append(df_toBeGrouped.columns.values,
@@ -171,7 +173,7 @@ def get_journal_data_old(file_path):
                 idx_divisors = np.insert(idx_divisors, 0, 0)
 
                 for i in range(len(idx_divisors)-1):
-                    print(i)
+                    # print(i)
                     slice = df_toBeGrouped_conid.iloc[(int(idx_divisors[i])):(int(idx_divisors[i+1])),]
                     slice_close = slice.copy().query('Open_CloseIndicator == "C"')
                     slice_open = slice.copy().query('Open_CloseIndicator == "O"')
@@ -523,27 +525,117 @@ app.layout = html.Div([
 def render_content(tab):
     if tab == 'open_risks':
         df = get_sample_data()
+
+        # sorting, first open orders
+        df = df.sort_values(by='Status', key=lambda x: x.map({'open':1, 'working':2}))
+
+        # Dynamically generate columns, but modify the Date column to include format
+        columns = [{"name": i, "id": i} for i in df.columns]
+
+        # Format only the 'Date' column
+        for col in columns:
+            if (col["id"] == 'FX') | (col["id"] == 'Last Price'):
+                col["type"] = "numeric"
+                col["format"] = dict(specifier='.4~f')
+            elif ((col["id"] == 'Risk (EUR)') | (col["id"] == 'Exposure (EUR)') |
+                  (col["id"] == 'UnRlzd PnL (EUR)') | (col["id"] == 'Rlzd PnL (EUR)')):
+                col["type"] = "numeric"
+                col["format"] = Format(precision=2, scheme=Scheme.decimal_integer,
+                                       group_delimiter="'", group=Group.yes, groups=[3])
+            elif (col["id"] == 'Risk NLV (bps)'):
+                col["type"] = "numeric"
+                col["format"] = dict(specifier='.0~f')
+
+            elif (col["id"] == 'Expos. NLV (%)'):
+                col["type"] = "numeric"
+                col["format"] = dict(specifier='.2~f')
+
+        # Compute Correlation Matrix
+        corr_matrix = get_corr_matrix().round(2)
+
+        # Create Heatmap
+        fig = ff.create_annotated_heatmap(
+            z=corr_matrix.values,
+            x=list(corr_matrix.columns),
+            y=list(corr_matrix.index),
+            colorscale="RdBu_r",  # Use a valid Plotly colorscale
+            annotation_text=corr_matrix.values,
+            showscale=False,
+            zmin=-1,  # Set minimum value of color scale
+            zmax=1,  # Set maximum value of color scale
+            font_colors = ["black"]  # Set annotation text color to black
+        )
+
+        # Improve Layout
+        fig.update_layout(
+            xaxis=dict(side="bottom"),
+            width=480,
+            height=400,
+            margin=dict(l=10, r=10, t=10, b=10),
+            paper_bgcolor="#f8f9fa",  # Background color of the entire figure
+            plot_bgcolor="#f8f9fa"  # Background color of the plot area
+        )
+
         return html.Div([
+
+            html.H3("Fund Exposure"),
             dash_table.DataTable(
                 data=df.to_dict('records'),
-                columns=[{"name": i, "id": i} for i in df.columns],
+                columns=columns,
+                sort_action="native",
                 style_table={'overflowX': 'auto', "border": "1px solid #ddd"},
                 style_header={'backgroundColor': "rgb(18,54,90)", 'color': 'white', 'fontWeight': 'bold'},
                 style_data={'backgroundColor': '#ecf0f1', 'color': '#2c3e50'},
                 # Conditionally style the 'pnl' column
                 style_data_conditional=[
                 {
-                    'if': {'filter_query': '{Real.PnL(EUR)} < 0', 'column_id': 'Real.PnL(EUR)'},
-                    'backgroundColor': 'red',
-                    'color': 'white',
+                    'if': {'filter_query': '{Status} = "working"', 'column_id': 'Status'},
+                    'backgroundColor': 'lightblue',
                 },
                 {
-                    'if': {'filter_query': '{Real.PnL(EUR)} >= 0', 'column_id': 'Real.PnL(EUR)'},
-                    'backgroundColor': 'green',
-                    'color': 'white',
+                    'if': {'filter_query': '{Status} = "open"', 'column_id': 'Status'},
+                    'backgroundColor': 'lightgreen',
                 },
+                {
+                    'if': {'filter_query': '{Position} = "LONG"', 'column_id': 'Position'},
+                    'color': 'forestgreen',
+                },
+                {
+                    'if': {'filter_query': '{Position} = "SHORT"', 'column_id': 'Position'},
+                    'color': 'firebrick',
+                },
+                # ASSET CLASS CONDITIONAL FORMATTING
+                {
+                    'if': {'filter_query': '{Asset Class} = "Rates"', 'column_id': 'Asset Class'},
+                    'backgroundColor': 'rgb(250, 230, 160)',  # Pastel Yellow
+                },
+                {
+                    'if': {'filter_query': '{Asset Class} = "Forex"', 'column_id': 'Asset Class'},
+                    'backgroundColor': 'rgb(128, 177, 240)',  # Softer Sky Blue
+                },
+                {
+                    'if': {'filter_query': '{Asset Class} = "Eqty Idx"', 'column_id': 'Asset Class'},
+                    'backgroundColor': 'rgb(102, 242, 204)',  # Minty Green
+                },
+                {
+                    'if': {'filter_query': '{Asset Class} = "Equity"', 'column_id': 'Asset Class'},
+                    'backgroundColor': 'rgb(198, 255, 240)',  # Pale Aqua
+                },
+                {
+                    'if': {'filter_query': '{Asset Class} = "Comdty"', 'column_id': 'Asset Class'},
+                    'backgroundColor': 'rgb(255, 178, 150)',  # Soft Coral
+                },
+                {
+                    'if': {'filter_query': '{Asset Class} = "Other"', 'column_id': 'Asset Class'},
+                    'backgroundColor': 'rgb(200, 180, 255)',  # Lavender
+                }
                 ]
-            )
+            ),
+            html.H4("Jan-F // Feb-G // Mar-H  // Apr-J  // May-K  // Jun-M  // Jul-N  // Aug-Q  // Sep-U  // Oct-V  // Nov-X  // Dec-Z",
+                    style={"color": "darkgray"}),
+            html.Br(),
+            html.H3("Correlation Matrix Heatmap"),
+            dcc.Graph(figure=fig)  # Render heatmap
         ])
     elif tab == 'journal':
         df = get_journal_data(file_path)
