@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03272025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03282025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -228,6 +228,7 @@ risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
 def positionsHistPrices(df, durationStr, barSizeSetting):
     # Define a dictionary to store the close prices
     close_prices_dict = {}
+    ATR_30 = {}
 
     for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
 
@@ -251,16 +252,28 @@ def positionsHistPrices(df, durationStr, barSizeSetting):
         ts_df = util.df(bars)
 
         # Extract only the date and close price
-        ts_df = ts_df[['date', 'close']]
         ts_df.set_index('date', inplace=True)
+        ts_close = ts_df[['close']]
+
+        period = 30
+        # Compute True Range (TR)
+        ts_df['Previous Close'] = ts_df['close'].shift(1)
+        ts_df['High-Low'] = ts_df['high'] - ts_df['low']
+        ts_df['High-PC'] = abs(ts_df['high'] - ts_df['Previous Close'])
+        ts_df['Low-PC'] = abs(ts_df['low'] - ts_df['Previous Close'])
+
+        ts_df['TR'] = ts_df[['High-Low', 'High-PC', 'Low-PC']].max(axis=1)
+
+        ts_df['ATR'] = ts_df['TR'].rolling(window=period).mean()
+        ATR_30[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_df['ATR'].values[-1]
 
         # Store the close prices in the dictionary with the symbol as the key
-        close_prices_dict[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_df['close']
+        close_prices_dict[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_close['close']
 
     # Combine all close price DataFrames into one DataFrame
     close_prices_df = pd.DataFrame(close_prices_dict)
 
-    return  close_prices_df
+    return  [close_prices_df, ATR_30]
 
 def addBaseCCYfx(df, ccy):
     # Fetch FX conversion rates to base currency
@@ -300,7 +313,7 @@ risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
 
 
-nans_lastPX_Ids = {120552103: '91.40'}
+nans_lastPX_Ids = {120552103: portfolio_df.query("ConID == 120552103")['Market Price'].values[0]}
 defect_ids = list(nans_lastPX_Ids.keys())
 
 contracts_quoted_USd = {526262864: 100,
@@ -337,9 +350,12 @@ def addLastPX(df):
     return df
 
 risk_df = addLastPX(risk_df)
-ts = positionsHistPrices(df = risk_df, durationStr= '1 Y', barSizeSetting= '1 day')
+result_query = positionsHistPrices(df = risk_df, durationStr= '1 Y', barSizeSetting= '1 day')
+ts = result_query[0]
+ATR_30 = result_query[1]
 ts_ret = ts.copy().pct_change().dropna()
 corr = ts_ret.corr()
+
 
 risk_df.replace('', np.nan, inplace=True)
 risk_df['Multiplier'] = risk_df.Multiplier.fillna(1)
@@ -360,6 +376,9 @@ last_risk = pd.DataFrame(columns=[
         'UnRlzd PnL (EUR)',
         'Exposure (EUR)',  # Scalar wrapped in list
         'Expos. NLV (%)',
+        'Stops',
+        'ATR 30D',
+        'ATR 30D (%)',
         'multiplier',  # Scalar wrapped in list
         'Last Price',  # Scalar wrapped in list
         'ConID' # Scalar wrapped in list
@@ -380,6 +399,7 @@ for conid in risk_df['ConID'].unique():
     multiplier = int(sub_df.Multiplier.unique()[0])/div
     lastPX = float(sub_df.LastPX.unique()[0])
     fx = float(sub_df['FX Rate to Base'].unique()[0])
+    ATR_30
 
     if sub_df.Position.isna().sum() == len(sub_df):
         position_status = "working"
@@ -395,8 +415,13 @@ for conid in risk_df['ConID'].unique():
 
         if open_position > 0: # long
             stops = sub_df[(sub_df["Stop Price"] < lastPX) & (sub_df["Limit Price"] < lastPX)].copy()
+            stops = stops.sort_values(by='Stop Price', ascending=False)
         elif open_position < 0: # short
             stops = sub_df[(sub_df["Stop Price"] > lastPX) & (sub_df["Limit Price"] > lastPX)].copy()
+            stops = stops.sort_values(by='Stop Price', ascending=True)
+
+        string_stops = ('P: ' + stops['Stop Price'].astype(str) + ', Q: ' + stops['Quantity'].astype(int).astype(str) + \
+                    ', Dist: ' + (abs(lastPX - stops['Stop Price'])*(-1) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
 
         stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
         position = sub_df['Position'].dropna().apply(lambda x: 'LONG' if x > 0 else ('SHORT' if x < 0 else 'neutral')).values[0]
@@ -410,6 +435,8 @@ for conid in risk_df['ConID'].unique():
         rlzd_PnL = 0
         unrlzd_PnL = 0
         max_STP = sub_df.loc[sub_df['Stop Price'].idxmax()]
+        string_stops = ('P: ' + max_STP['Stop Price'].astype(str) + ', Q: ' + max_STP['Quantity'].astype(int).astype(str) +
+                        ', Dist: ' + (abs(lastPX - max_STP['Stop Price']) / lastPX * 100).round(2).astype(str) + '%')
 
         if max_STP['Stop Price'] - max_STP['LastPX'] > 0:
             position = 'LONG'
@@ -437,6 +464,9 @@ for conid in risk_df['ConID'].unique():
         'UnRlzd PnL (EUR)':[unrlzd_PnL],
         'Exposure (EUR)': [exposure],  # Scalar wrapped in list
         'Expos. NLV (%)': [exposure/NLV*100],
+        'Stops': [string_stops],
+        'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
+        'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)/lastPX],
         'multiplier': [multiplier],  # Scalar wrapped in list
         'Last Price': [lastPX],  # Scalar wrapped in list
         'ConID': [conid]  # Scalar wrapped in list

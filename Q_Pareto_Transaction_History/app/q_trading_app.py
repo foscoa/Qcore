@@ -286,7 +286,7 @@ def get_journal_data_old(file_path):
 
     aggr2_df['Trade Duration'] = aggr2_df['Trade Duration'].apply(format_duration)
     aggr2_df['Quantity'] = aggr2_df.Quantity.abs()
-    
+
 
     aggr2_df = aggr2_df.sort_values(by="Last Exit Date", ascending=False)
 
@@ -549,6 +549,16 @@ def render_content(tab):
             elif (col["id"] == 'Expos. NLV (%)'):
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.2~f')
+
+            elif (col["id"] == 'ATR 30D'):
+                col["type"] = "numeric"
+                col["format"] = dict(specifier='.3~f')
+
+            elif (col["id"] == 'ATR 30D (%)'):
+                col["type"] = "numeric"
+                col["format"] = dash_table.FormatTemplate.percentage(2)
+
+
 
         # Compute Correlation Matrix
         corr_matrix = get_corr_matrix().round(2)

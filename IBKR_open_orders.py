@@ -2,6 +2,7 @@ from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 from ibapi.contract import Contract
 from ibapi.execution import ExecutionFilter
+from ibapi.ticktype import TickType
 from ibapi.order import Order
 import pandas as pd
 import time
@@ -14,6 +15,7 @@ class IBapi(EWrapper, EClient):
         self.trades_list = []  # List to store executed trades
         self.positions_list = []  # List to store position data
         self.contract_details_map = {}  # Map permId -> longName
+        self.last_prices = {}  # Dictionary to store last prices
 
     def nextValidId(self, orderId):
         """ IBKR assigns a valid order ID when connected. """
@@ -72,14 +74,9 @@ class IBapi(EWrapper, EClient):
         self.trades_list.append(trade_data)
         print(f"Received Execution: {trade_data}")  # Debugging output
 
-    def position(self, account, contract, position, avgCost):
-        """ Called when an open position is received. """
-        base_currency = "USD"
-        fx_rate = self.get_fx_rate_ibkr(base_currency, contract.currency)  # Fetch dynamically
-        multiplier = float(contract.multiplier) if contract.multiplier else 1.0
+    def position(self, account, contract, position, avgCost, marketPrice):
 
-        # Calculate notional exposure
-        notional_exposure = position * multiplier * avgCost * fx_rate
+        multiplier = float(contract.multiplier) if contract.multiplier else 1.0
 
         position_data = {
             "Account": account,
@@ -91,10 +88,15 @@ class IBapi(EWrapper, EClient):
             "Currency": contract.currency,
             "Position": position,
             "Avg Cost": avgCost,
-            "Notional Exposure": notional_exposure
+            "Last Price": marketPrice  # Add last price
         }
         self.positions_list.append(position_data)
         print(f"Processed Position: {position_data}")
+
+        # Request market data only for the current position symbol if it isn't already requested
+        if contract.symbol not in self.last_prices:
+            print(f"Requesting market data for {contract.symbol}")
+            self.reqMktData(contract.conId, contract, "", False, False, [])
 
     def contractDetails(self, reqId, contractDetails):
         """ Called when contract details are received. """
@@ -111,10 +113,19 @@ class IBapi(EWrapper, EClient):
 
         print(f"Received Contract Details: {contractDetails.contract.symbol} - {longName}")
 
-
     def openOrderEnd(self):
         """ Triggered when all open orders are received. """
         print("All open orders received.")
+
+    def tickPrice(self, reqId, tickType, price, attrib):
+        """ Callback for market data price updates """
+        if tickType == TickType.LAST:
+            # Update last price for the symbol in positions
+            for symbol in self.last_prices:
+                if reqId == self.orders_list[0].get("Perm ID"):  # Match symbol to last price
+                    self.last_prices[symbol] = price
+            print(f"Last price updated for {symbol}: {price}")
+
 
 # Start IBAPI
 app = IBapi()
@@ -134,5 +145,3 @@ open_positions = pd.DataFrame(app.positions_list)
 
 # Disconnect after fetching data
 app.disconnect()
-
-#

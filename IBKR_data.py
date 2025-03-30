@@ -36,14 +36,14 @@ if __name__ == "__main__":
     # Step 1: Create an instance of the IBApi class
 
     # Define file path
-    file_path = ".\\futures_contract_specs.csv"  # Update with your file location
+    file_path = "./futures_contract_specs.csv"  # Update with your file location
 
     # Read the CSV file
     fut_specs = pd.read_csv(file_path).to_dict(orient='records')
 
     # Create a contract for E-mini S&P 500 futures
 
-    fut = [i for i in fut_specs if i['symbol']=='CT'][0]
+    fut = [i for i in fut_specs if i['symbol']=='VIX'][0]
 
     app = IBApi()
 
