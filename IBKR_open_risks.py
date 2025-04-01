@@ -181,7 +181,7 @@ orders_df = pd.DataFrame([
         'Multiplier': trade.contract.multiplier if hasattr(trade.contract, 'multiplier') else 1,
         'Order Type': trade.order.orderType,
         'Quantity': trade.order.totalQuantity,
-        'Action': trade.order.action,  # BUY or SELL
+        'Action': trade.order.action,
         'Limit Price': trade.order.lmtPrice if hasattr(trade.order, 'lmtPrice') else None,
         'Stop Price': trade.order.auxPrice if hasattr(trade.order, 'auxPrice') else None,
         'Status': trade.orderStatus.status
@@ -394,12 +394,12 @@ for conid in risk_df['ConID'].unique():
     else:
         div = 1
 
-    sub_df = risk_df.copy().query('ConID == @conid')
+    sub_df = risk_df.copy().query('ConID == @conid & Status != "Cancelled" & Quantity != 0')
 
     multiplier = int(sub_df.Multiplier.unique()[0])/div
     lastPX = float(sub_df.LastPX.unique()[0])
     fx = float(sub_df['FX Rate to Base'].unique()[0])
-    ATR_30
+
 
     if sub_df.Position.isna().sum() == len(sub_df):
         position_status = "working"
@@ -409,7 +409,9 @@ for conid in risk_df['ConID'].unique():
     if position_status == "open":
         open_position = sub_df.Position.dropna().sum()
         exposure = open_position * multiplier * lastPX / fx
-        rlzd_PnL = df_open_rzld_pnl[conid] + portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]
+        rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]
+        if conid in df_open_rzld_pnl.index:
+            rlzd_PnL += df_open_rzld_pnl[conid]
         unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]
 
 
@@ -428,51 +430,85 @@ for conid in risk_df['ConID'].unique():
         stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price'] + stops['Limit Price']) / fx
         risk = exposure - stops_exec_exp.sum()
 
+        new_row = pd.DataFrame(data={
+            'Status': [position_status],
+            'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+            'FX': [fx],  # Scalar wrapped in list
+            'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
+            'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
+            'Name': [sub_df.Name.unique()[0]],
+            'Asset Class': [sub_df['Asset Class'].unique()[0]],
+            'Position': [position],
+            'Contracts': [open_position],  # Scalar wrapped in list
+            'Risk (EUR)': [risk],  # Scalar wrapped in list
+            'Risk NLV (bps)': [(risk / NLV) * 10000],
+            'Rlzd PnL (EUR)': [rlzd_PnL],
+            'UnRlzd PnL (EUR)': [unrlzd_PnL],
+            'Exposure (EUR)': [exposure],  # Scalar wrapped in list
+            'Expos. NLV (%)': [exposure / NLV * 100],
+            'Stops': [string_stops],
+            'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
+            'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
+            'multiplier': [multiplier],  # Scalar wrapped in list
+            'Last Price': [lastPX],  # Scalar wrapped in list
+            'ConID': [conid]  # Scalar wrapped in list
+        })
+
+        last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
     elif position_status == "working":
         exposure = 0
         open_position = 0
         rlzd_PnL = 0
         unrlzd_PnL = 0
-        max_STP = sub_df.loc[sub_df['Stop Price'].idxmax()]
-        string_stops = ('P: ' + max_STP['Stop Price'].astype(str) + ', Q: ' + max_STP['Quantity'].astype(int).astype(str) +
+
+        groups = {k: v for k, v in sub_df.groupby('Quantity')}
+
+        for order in groups.values():
+
+            sub_df = order
+
+            max_STP = sub_df.loc[sub_df['Stop Price'].idxmax()]
+
+            if max_STP['Stop Price'] - max_STP['LastPX'] > 0:
+                position = 'LONG'
+            else:
+                position = 'SHORT'
+
+            string_stops = (
+                        'P: ' + max_STP['Stop Price'].astype(str) + ', Q: ' + max_STP['Quantity'].astype(int).astype(str) +
                         ', Dist: ' + (abs(lastPX - max_STP['Stop Price']) / lastPX * 100).round(2).astype(str) + '%')
 
-        if max_STP['Stop Price'] - max_STP['LastPX'] > 0:
-            position = 'LONG'
-        else:
-            position = 'SHORT'
+            sub_df = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
+            sub_df['dir'] = sub_df['Action'].map({'SELL': -1, 'BUY': 1})
 
-        sub_df = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
-        sub_df['dir'] = sub_df['Action'].map({'SELL': -1, 'BUY': 1})
+            risk = (sub_df.Quantity * multiplier * (sub_df['Stop Price'] + sub_df['Limit Price']) * sub_df.dir).sum() / fx
 
-        risk = (sub_df.Quantity * multiplier * (sub_df['Stop Price'] + sub_df['Limit Price']) * sub_df.dir).sum() / fx
+            new_row = pd.DataFrame(data={
+                'Status': [position_status],
+                'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+                'FX': [fx],  # Scalar wrapped in list
+                'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
+                'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
+                'Name': [sub_df.Name.unique()[0]],
+                'Asset Class': [sub_df['Asset Class'].unique()[0]],
+                'Position': [position],
+                'Contracts': [open_position],  # Scalar wrapped in list
+                'Risk (EUR)': [risk],  # Scalar wrapped in list
+                'Risk NLV (bps)': [(risk / NLV) * 10000],
+                'Rlzd PnL (EUR)': [rlzd_PnL],
+                'UnRlzd PnL (EUR)': [unrlzd_PnL],
+                'Exposure (EUR)': [exposure],  # Scalar wrapped in list
+                'Expos. NLV (%)': [exposure / NLV * 100],
+                'Stops': [string_stops],
+                'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
+                'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
+                'multiplier': [multiplier],  # Scalar wrapped in list
+                'Last Price': [lastPX],  # Scalar wrapped in list
+                'ConID': [conid]  # Scalar wrapped in list
+            })
 
-    new_row = pd.DataFrame(data={
-        'Status': [position_status],
-        'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
-        'FX': [fx],  # Scalar wrapped in list
-        'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
-        'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
-        'Name': [sub_df.Name.unique()[0]],
-        'Asset Class': [sub_df['Asset Class'].unique()[0]],
-        'Position': [position],
-        'Contracts': [open_position],  # Scalar wrapped in list
-        'Risk (EUR)': [risk],  # Scalar wrapped in list
-        'Risk NLV (bps)':[(risk/NLV) *10000],
-        'Rlzd PnL (EUR)':[rlzd_PnL],
-        'UnRlzd PnL (EUR)':[unrlzd_PnL],
-        'Exposure (EUR)': [exposure],  # Scalar wrapped in list
-        'Expos. NLV (%)': [exposure/NLV*100],
-        'Stops': [string_stops],
-        'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
-        'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)/lastPX],
-        'multiplier': [multiplier],  # Scalar wrapped in list
-        'Last Price': [lastPX],  # Scalar wrapped in list
-        'ConID': [conid]  # Scalar wrapped in list
-    })
-
-    last_risk = pd.concat([last_risk, new_row], ignore_index=True)
+            last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
 last_risk.to_csv("Q_Pareto_Transaction_History/Data/open_risks.csv")
 corr.to_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv")
