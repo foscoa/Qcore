@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03282025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04012025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -171,7 +171,7 @@ trades = ib.trades()  # Fetch updated order list with contracts
 # Convert trades to DataFrame
 orders_df = pd.DataFrame([
     {
-        'Order ID': trade.order.orderId,
+        'PermID': trade.order.permId,
         'ConID': trade.contract.conId,
         'Symbol': trade.contract.symbol,
         'Local Symbol': trade.contract.localSymbol,
@@ -311,13 +311,17 @@ contracts_MM = [11625311, 74991935, 281534370, 568953593]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
+risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
-nans_lastPX_Ids = {120552103: portfolio_df.query("ConID == 120552103")['Market Price'].values[0]}
+nans_lastPX_Ids = {120552103: portfolio_df.query("ConID == 120552103")['Market Price'].values[0],
+                   14075063: portfolio_df.query("ConID == 14075063")['Market Price'].values[0]}
 defect_ids = list(nans_lastPX_Ids.keys())
 
 contracts_quoted_USd = {526262864: 100,
-                        565301283: 100}
+                        565301283: 100,
+                        #656391483: 100
+}
 
 def addLastPX(df):
     # Fetch FX conversion rates to base currency
@@ -407,28 +411,31 @@ for conid in risk_df['ConID'].unique():
         position_status = "open"
 
     if position_status == "open":
-        open_position = sub_df.Position.dropna().sum()
+        open_position = abs(sub_df.Position.dropna().sum())
         exposure = open_position * multiplier * lastPX / fx
         rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]
         if conid in df_open_rzld_pnl.index:
             rlzd_PnL += df_open_rzld_pnl[conid]
         unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]
 
-
+        stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
         if open_position > 0: # long
-            stops = sub_df[(sub_df["Stop Price"] < lastPX) & (sub_df["Limit Price"] < lastPX)].copy()
             stops = stops.sort_values(by='Stop Price', ascending=False)
         elif open_position < 0: # short
-            stops = sub_df[(sub_df["Stop Price"] > lastPX) & (sub_df["Limit Price"] > lastPX)].copy()
             stops = stops.sort_values(by='Stop Price', ascending=True)
 
         string_stops = ('P: ' + stops['Stop Price'].astype(str) + ', Q: ' + stops['Quantity'].astype(int).astype(str) + \
                     ', Dist: ' + (abs(lastPX - stops['Stop Price'])*(-1) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
 
         stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
-        position = sub_df['Position'].dropna().apply(lambda x: 'LONG' if x > 0 else ('SHORT' if x < 0 else 'neutral')).values[0]
-        stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price'] + stops['Limit Price']) / fx
-        risk = exposure - stops_exec_exp.sum()
+
+        if list(stops.Action)[0] == 'BUY':
+            position = 'SHORT'
+        else:
+            position = 'LONG'
+
+        stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price']) / fx
+        risk = abs(exposure - stops_exec_exp.sum())
 
         new_row = pd.DataFrame(data={
             'Status': [position_status],
@@ -466,21 +473,21 @@ for conid in risk_df['ConID'].unique():
 
         for order in groups.values():
 
-            sub_df = order
+            sub_df = order.sort_values(by='PermID')
+            sub_df = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
+            sub_df['dir'] = sub_df['Action'].map({'SELL': -1, 'BUY': 1})
 
-            max_STP = sub_df.loc[sub_df['Stop Price'].idxmax()]
-
-            if max_STP['Stop Price'] - max_STP['LastPX'] > 0:
+            if list(sub_df.Action)[0] == 'BUY':
                 position = 'LONG'
             else:
                 position = 'SHORT'
 
             string_stops = (
-                        'P: ' + max_STP['Stop Price'].astype(str) + ', Q: ' + max_STP['Quantity'].astype(int).astype(str) +
-                        ', Dist: ' + (abs(lastPX - max_STP['Stop Price']) / lastPX * 100).round(2).astype(str) + '%')
+                        'P: ' + str(list(sub_df['Stop Price'])[0]) + ', Q: ' + str(list(sub_df['Quantity'])[0]) +
+                        ', Dist: ' + str(round((abs(lastPX - list(sub_df['Stop Price'])[0]) / lastPX * 100),2)) + '%'
+            )
 
-            sub_df = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
-            sub_df['dir'] = sub_df['Action'].map({'SELL': -1, 'BUY': 1})
+
 
             risk = (sub_df.Quantity * multiplier * (sub_df['Stop Price'] + sub_df['Limit Price']) * sub_df.dir).sum() / fx
 
