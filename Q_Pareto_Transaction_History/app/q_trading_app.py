@@ -11,7 +11,7 @@ from ib_insync import *
 
 asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04012025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04022025.csv"
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -20,6 +20,20 @@ app.title = "Q - PT Trading Overview"
 # Sample DataFrames
 def get_sample_data():
     return pd.read_csv("Q_Pareto_Transaction_History/Data/open_risks.csv", index_col=0)
+
+sample_data = get_sample_data()
+# summary table:
+def get_summary_table():
+    df = get_sample_data()
+
+    summary_df = pd.DataFrame(columns=[
+        'Name',
+        ''
+    ])
+
+def get_number_postions(df):
+    return df["Status"].value_counts().to_dict()
+
 
 def get_corr_matrix():
     return pd.read_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv", index_col=0)
@@ -524,7 +538,7 @@ app.layout = html.Div([
 )
 def render_content(tab):
     if tab == 'open_risks':
-        df = get_sample_data()
+        df = sample_data
 
         # sorting, first open orders
         df = df.sort_values(by='Status', key=lambda x: x.map({'open':1, 'working':2}))
@@ -587,8 +601,21 @@ def render_content(tab):
         )
 
         return html.Div([
-
             html.H3("Fund Exposure"),
+            html.P("open positions: " + str(get_number_postions(sample_data)['open']), style={"fontSize": "12px"}),
+            html.P("working positions: " + str(get_number_postions(sample_data)['working']), style={"fontSize": "12px"}),
+            html.P("Net Liquidation Value (NLV): " + "{:,.0f}".format(NLV).replace(",", "'") + " EUR",
+                   style={"fontSize": "12px"}),
+            html.P("Total Risk (all stops hit): " + "{:,.0f}".format(sample_data.loc[df["Status"] == "open", "Risk (EUR)"].sum()).replace(",", "'") + \
+                   " EUR | " + str(round(sample_data.loc[df["Status"] == "open", "Risk (EUR)"].sum() /NLV *10000,2)) + " bps",
+                   style={"fontSize": "12px"}),
+            html.P("Gross Exposure (Trading): " + "{:,.0f}".format(
+                sample_data.loc[df["Status"] == "open", "Exposure (EUR)"].sum()).replace(",", "'") + \
+                   " EUR | " + str(
+                round(sample_data.loc[df["Status"] == "open", "Exposure (EUR)"].sum() / NLV * 100, 2)) + "%",
+                   style={"fontSize": "12px"}),
+            html.Br(),
+            html.H3("Position Details"),
             dash_table.DataTable(
                 data=df.to_dict('records'),
                 columns=columns,

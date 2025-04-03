@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04012025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04022025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -315,7 +315,9 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {120552103: portfolio_df.query("ConID == 120552103")['Market Price'].values[0],
-                   14075063: portfolio_df.query("ConID == 14075063")['Market Price'].values[0]}
+                   14075063: portfolio_df.query("ConID == 14075063")['Market Price'].values[0],
+                   128832371: 155.19 # ATO
+                   }
 defect_ids = list(nans_lastPX_Ids.keys())
 
 contracts_quoted_USd = {526262864: 100,
@@ -376,11 +378,11 @@ last_risk = pd.DataFrame(columns=[
         'Contracts',
         'Risk (EUR)',
         'Risk NLV (bps)',
-        'Rlzd PnL (EUR)',
-        'UnRlzd PnL (EUR)',
+        #'Rlzd PnL (EUR)',
+        #'UnRlzd PnL (EUR)',
         'Exposure (EUR)',  # Scalar wrapped in list
         'Expos. NLV (%)',
-        'Stops',
+        'Stop or Trigger',
         'ATR 30D',
         'ATR 30D (%)',
         'multiplier',  # Scalar wrapped in list
@@ -390,7 +392,8 @@ last_risk = pd.DataFrame(columns=[
 
 df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 
-for conid in risk_df['ConID'].unique():
+arr = risk_df['ConID'].unique()
+for conid in arr[(arr != 639786536) & (arr != 656391483)]:
 
     # adjust for prices quoted in USd (cents)
     if conid in contracts_quoted_USd.keys():
@@ -425,7 +428,7 @@ for conid in risk_df['ConID'].unique():
             stops = stops.sort_values(by='Stop Price', ascending=True)
 
         string_stops = ('P: ' + stops['Stop Price'].astype(str) + ', Q: ' + stops['Quantity'].astype(int).astype(str) + \
-                    ', Dist: ' + (abs(lastPX - stops['Stop Price'])*(-1) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
+                    ', Dist: ' + (abs(lastPX - stops['Stop Price']) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
 
         stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
 
@@ -449,11 +452,11 @@ for conid in risk_df['ConID'].unique():
             'Contracts': [open_position],  # Scalar wrapped in list
             'Risk (EUR)': [risk],  # Scalar wrapped in list
             'Risk NLV (bps)': [(risk / NLV) * 10000],
-            'Rlzd PnL (EUR)': [rlzd_PnL],
-            'UnRlzd PnL (EUR)': [unrlzd_PnL],
+            # 'Rlzd PnL (EUR)': [rlzd_PnL],
+            # 'UnRlzd PnL (EUR)': [unrlzd_PnL],
             'Exposure (EUR)': [exposure],  # Scalar wrapped in list
             'Expos. NLV (%)': [exposure / NLV * 100],
-            'Stops': [string_stops],
+            'Stop or Trigger': [string_stops],
             'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
             'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
             'multiplier': [multiplier],  # Scalar wrapped in list
@@ -503,11 +506,11 @@ for conid in risk_df['ConID'].unique():
                 'Contracts': [open_position],  # Scalar wrapped in list
                 'Risk (EUR)': [risk],  # Scalar wrapped in list
                 'Risk NLV (bps)': [(risk / NLV) * 10000],
-                'Rlzd PnL (EUR)': [rlzd_PnL],
-                'UnRlzd PnL (EUR)': [unrlzd_PnL],
+                # 'Rlzd PnL (EUR)': [rlzd_PnL],
+                #'UnRlzd PnL (EUR)': [unrlzd_PnL],
                 'Exposure (EUR)': [exposure],  # Scalar wrapped in list
                 'Expos. NLV (%)': [exposure / NLV * 100],
-                'Stops': [string_stops],
+                'Stop or Trigger': [string_stops],
                 'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
                 'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
                 'multiplier': [multiplier],  # Scalar wrapped in list
