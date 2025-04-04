@@ -11,7 +11,7 @@ from ib_insync import *
 
 asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04022025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04032025.csv"
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)

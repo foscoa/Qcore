@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04022025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04032025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -314,7 +314,7 @@ risk_df = risk_df.copy().query("SecType not in 'CASH'")
 risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
-nans_lastPX_Ids = {120552103: portfolio_df.query("ConID == 120552103")['Market Price'].values[0],
+nans_lastPX_Ids = {120552103: 0,
                    14075063: portfolio_df.query("ConID == 14075063")['Market Price'].values[0],
                    128832371: 155.19 # ATO
                    }
@@ -393,7 +393,8 @@ last_risk = pd.DataFrame(columns=[
 df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 
 arr = risk_df['ConID'].unique()
-for conid in arr[(arr != 639786536) & (arr != 656391483)]:
+arr = arr[(arr != 120552103)  & (arr != 128832371) & (arr != 526262864)]
+for conid in arr:
 
     # adjust for prices quoted in USd (cents)
     if conid in contracts_quoted_USd.keys():
