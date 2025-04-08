@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04032025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04082025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -307,16 +307,16 @@ def addBaseCCYfx(df, ccy):
 risk_df = addBaseCCYfx(risk_df, 'EUR')
 
 # contracts for Money market purposed
-contracts_MM = [11625311, 74991935, 281534370, 568953593]
+contracts_MM = [11625311, 74991935, 281534370, 301467983, 568953593]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
 risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
-nans_lastPX_Ids = {120552103: 0,
-                   14075063: portfolio_df.query("ConID == 14075063")['Market Price'].values[0],
-                   128832371: 155.19 # ATO
+nans_lastPX_Ids = {
+                   488641260: portfolio_df.query("ConID == 488641260")['Market Price'].values[0], # MDAX cert,
+                    230949979 : 7.3936, # USD CNH
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -393,7 +393,7 @@ last_risk = pd.DataFrame(columns=[
 df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 
 arr = risk_df['ConID'].unique()
-arr = arr[(arr != 120552103)  & (arr != 128832371) & (arr != 526262864)]
+# arr = arr[(arr != 120552103)  & (arr != 128832371) & (arr != 526262864)]
 for conid in arr:
 
     # adjust for prices quoted in USd (cents)
@@ -404,7 +404,7 @@ for conid in arr:
 
     sub_df = risk_df.copy().query('ConID == @conid & Status != "Cancelled" & Quantity != 0')
 
-    multiplier = int(sub_df.Multiplier.unique()[0])/div
+    multiplier = float(sub_df.Multiplier.unique()[0])/div
     lastPX = float(sub_df.LastPX.unique()[0])
     fx = float(sub_df['FX Rate to Base'].unique()[0])
 
@@ -417,29 +417,42 @@ for conid in arr:
     if position_status == "open":
         open_position = abs(sub_df.Position.dropna().sum())
         exposure = open_position * multiplier * lastPX / fx
+        if risk_df[risk_df.ConID == conid].SecType.values[0] == 'WAR':
+            exposure = (sub_df.Position * sub_df.LastPX).values[0]
+
         rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]
         if conid in df_open_rzld_pnl.index:
             rlzd_PnL += df_open_rzld_pnl[conid]
         unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]
 
         stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
-        if open_position > 0: # long
-            stops = stops.sort_values(by='Stop Price', ascending=False)
-        elif open_position < 0: # short
-            stops = stops.sort_values(by='Stop Price', ascending=True)
 
-        string_stops = ('P: ' + stops['Stop Price'].astype(str) + ', Q: ' + stops['Quantity'].astype(int).astype(str) + \
-                    ', Dist: ' + (abs(lastPX - stops['Stop Price']) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
+        if not stops.empty: # there are stops
+            if open_position > 0: # long
+                stops = stops.sort_values(by='Stop Price', ascending=False)
+            elif open_position < 0: # short
+                stops = stops.sort_values(by='Stop Price', ascending=True)
 
-        stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
+            string_stops = ('P: ' + stops['Stop Price'].astype(str) + ', Q: ' + stops['Quantity'].astype(int).astype(str) + \
+                        ', Dist: ' + (abs(lastPX - stops['Stop Price']) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
 
-        if list(stops.Action)[0] == 'BUY':
-            position = 'SHORT'
-        else:
-            position = 'LONG'
+            stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
 
-        stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price']) / fx
-        risk = abs(exposure - stops_exec_exp.sum())
+            if list(stops.Action)[0] == 'BUY':
+                position = 'SHORT'
+            else:
+                position = 'LONG'
+
+            stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price']) / fx
+            risk = abs(exposure - stops_exec_exp.sum())
+
+        elif stops.empty: # no stops
+            string_stops = ''
+            if portfolio_df[portfolio_df.ConID == conid].Position.values > 0:
+                position = 'LONG'
+            else:
+                position = 'SHORT'
+            risk = exposure
 
         new_row = pd.DataFrame(data={
             'Status': [position_status],

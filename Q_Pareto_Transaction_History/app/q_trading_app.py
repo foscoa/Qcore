@@ -11,7 +11,7 @@ from ib_insync import *
 
 asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04032025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04082025.csv"
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -33,7 +33,6 @@ def get_summary_table():
 
 def get_number_postions(df):
     return df["Status"].value_counts().to_dict()
-
 
 def get_corr_matrix():
     return pd.read_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv", index_col=0)
@@ -510,7 +509,6 @@ def get_journal_data(file_path):
 
     # Return the cleaned and aggregated DataFrame
     return aggregated_positions_df.sort_values(by="Last Exit Date", ascending=False)
-
 
 def get_statistics():
     return {"Win Rate": "60%", "Avg Profit": "$20", "Avg Loss": "$10"}

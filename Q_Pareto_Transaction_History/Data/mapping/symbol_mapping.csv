@@ -43,4 +43,6 @@ L,Loews Corp,Equity
 ZM,Soybean Meal,Comdty
 ZF,5Y T-Note,Rates
 SRG,SNAM SPA,Equity
-ATO, ATMOS Energy Corp,Equity
+ATO,ATMOS Energy Corp,Equity
+MDAX, Call Turbo-Option on MDAX,Eqty Idx
+USD,USD.CNH,Forex
