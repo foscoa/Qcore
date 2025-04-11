@@ -11,7 +11,7 @@ from ib_insync import *
 
 asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04082025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04112025.csv"
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -32,7 +32,13 @@ def get_summary_table():
     ])
 
 def get_number_postions(df):
-    return df["Status"].value_counts().to_dict()
+    nr_positions = df["Status"].value_counts().to_dict()
+    if 'working' not in nr_positions.keys():
+        nr_positions['working'] = 0
+
+    if 'open' not in nr_positions.keys():
+        nr_positions['open'] = 0
+    return nr_positions
 
 def get_corr_matrix():
     return pd.read_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv", index_col=0)
@@ -669,8 +675,8 @@ def render_content(tab):
             html.H4("Jan-F // Feb-G // Mar-H  // Apr-J  // May-K  // Jun-M  // Jul-N  // Aug-Q  // Sep-U  // Oct-V  // Nov-X  // Dec-Z",
                     style={"color": "darkgray"}),
             html.Br(),
-            html.H3("Correlation Matrix Heatmap"),
-            dcc.Graph(figure=fig)  # Render heatmap
+            # html.H3("Correlation Matrix Heatmap"),
+            #dcc.Graph(figure=fig)  # Render heatmap
         ])
     elif tab == 'journal':
         df = get_journal_data(file_path)
@@ -781,4 +787,4 @@ def render_content(tab):
 
 # Run server
 if __name__ == '__main__':
-    app.run_server(debug=False, port=8051)
+    app.run(debug=False, port=8051)

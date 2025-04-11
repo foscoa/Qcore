@@ -46,3 +46,7 @@ SRG,SNAM SPA,Equity
 ATO,ATMOS Energy Corp,Equity
 MDAX, Call Turbo-Option on MDAX,Eqty Idx
 USD,USD.CNH,Forex
+SOFR3,SOFR 3M,Rates
+ES,E-mini S&P 500,Eqty Idx
+NEM,Newmont Corp,Equity
+CHF,Swiss Franc,Forex
