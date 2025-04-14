@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04112025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04142025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -184,7 +184,8 @@ orders_df = pd.DataFrame([
         'Action': trade.order.action,
         'Limit Price': trade.order.lmtPrice if hasattr(trade.order, 'lmtPrice') else None,
         'Stop Price': trade.order.auxPrice if hasattr(trade.order, 'auxPrice') else None,
-        'Status': trade.orderStatus.status
+        'Status': trade.orderStatus.status,
+        'Fills': trade.fills
     } for trade in trades if trade.order  # Ensure order exists
 ])
 
@@ -324,6 +325,7 @@ defect_ids = list(nans_lastPX_Ids.keys())
 contracts_quoted_USd = {526262864: 100,
                         565301283: 100,
                         577421489: 100,
+                        532513462: 100,
                         #656391483: 100
 }
 
@@ -380,8 +382,8 @@ last_risk = pd.DataFrame(columns=[
         'Contracts',
         'Risk (EUR)',
         'Risk NLV (bps)',
-        #'Rlzd PnL (EUR)',
-        #'UnRlzd PnL (EUR)',
+        'Rlzd PnL (EUR)',
+        'UnRlzdPnL(EUR)',
         'Exposure (EUR)',  # Scalar wrapped in list
         'Expos. NLV (%)',
         'Stop or Trigger',
@@ -394,10 +396,14 @@ last_risk = pd.DataFrame(columns=[
 
 df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 
+''
+
 arr = risk_df['ConID'].unique()
-arr = arr[(arr != 620731015)]
 # arr = arr[(arr != 620731015)  & (arr != 128832371) & (arr != 526262864)]
 for conid in arr:
+
+    flag_filledANDcanc = risk_df.copy().query('ConID == @conid and (Status != "Cancelled" and Status != "Filled")').empty
+    flag_notOpen = conid not in positions_df.ConID
 
     # adjust for prices quoted in USd (cents)
     if conid in contracts_quoted_USd.keys():
@@ -405,7 +411,10 @@ for conid in arr:
     else:
         div = 1
 
-    sub_df = risk_df.copy().query('ConID == @conid & Status != "Cancelled" & Quantity != 0')
+    if flag_notOpen and flag_filledANDcanc:
+        sub_df = risk_df.copy().query('ConID == @conid')
+    else:
+        sub_df = risk_df.copy().query('ConID == @conid & Status != "Cancelled" & Quantity != 0')
 
     multiplier = float(sub_df.Multiplier.unique()[0])/div
     lastPX = float(sub_df.LastPX.unique()[0])
@@ -417,16 +426,19 @@ for conid in arr:
     else:
         position_status = "open"
 
+    if flag_notOpen and flag_filledANDcanc:
+        position_status = "closed"
+
     if position_status == "open":
         open_position = abs(sub_df.Position.dropna().sum())
         exposure = open_position * multiplier * lastPX / fx
         if risk_df[risk_df.ConID == conid].SecType.values[0] == 'WAR':
             exposure = (sub_df.Position * sub_df.LastPX).values[0]
 
-        rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]
+        rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]/fx
         if conid in df_open_rzld_pnl.index:
             rlzd_PnL += df_open_rzld_pnl[conid]
-        unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]
+        unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]/fx
 
         stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
 
@@ -469,8 +481,8 @@ for conid in arr:
             'Contracts': [open_position],  # Scalar wrapped in list
             'Risk (EUR)': [risk],  # Scalar wrapped in list
             'Risk NLV (bps)': [(risk / NLV) * 10000],
-            # 'Rlzd PnL (EUR)': [rlzd_PnL],
-            # 'UnRlzd PnL (EUR)': [unrlzd_PnL],
+            'Rlzd PnL (EUR)': [rlzd_PnL],
+            'UnRlzdPnL(EUR)': [unrlzd_PnL],
             'Exposure (EUR)': [exposure],  # Scalar wrapped in list
             'Expos. NLV (%)': [exposure / NLV * 100],
             'Stop or Trigger': [string_stops],
@@ -525,8 +537,8 @@ for conid in arr:
                     'Contracts': [open_position],  # Scalar wrapped in list
                     'Risk (EUR)': [risk],  # Scalar wrapped in list
                     'Risk NLV (bps)': [(risk / NLV) * 10000],
-                    # 'Rlzd PnL (EUR)': [rlzd_PnL],
-                    #'UnRlzd PnL (EUR)': [unrlzd_PnL],
+                    'Rlzd PnL (EUR)': [rlzd_PnL],
+                    'UnRlzdPnL(EUR)': [unrlzd_PnL],
                     'Exposure (EUR)': [exposure],  # Scalar wrapped in list
                     'Expos. NLV (%)': [exposure / NLV * 100],
                     'Stop or Trigger': [string_stops],
@@ -538,6 +550,53 @@ for conid in arr:
                 })
 
                 last_risk = pd.concat([last_risk, new_row], ignore_index=True)
+
+    elif position_status == "closed":
+        exposure = 0
+        open_position = 0
+        risk = 0
+        unrlzd_PnL = 0
+        string_stops = np.nan
+
+
+        rlzd_PnL = 0
+        for fill in orders_df.query('ConID == @conid').Fills:
+            if fill == []:
+                continue
+            rlzd_PnL += fill[0].commissionReport.realizedPNL
+
+        rlzd_PnL += df_open_rzld_pnl[conid]
+
+        if list(sub_df.Action)[-1] == 'SELL':
+            position = 'LONG'
+        else:
+            position = 'SHORT'
+
+        new_row = pd.DataFrame(data={
+            'Status': [position_status],
+            'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+            'FX': [fx],  # Scalar wrapped in list
+            'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
+            'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
+            'Name': [sub_df.Name.unique()[0]],
+            'Asset Class': [sub_df['Asset Class'].unique()[0]],
+            'Position': [position],
+            'Contracts': [open_position],  # Scalar wrapped in list
+            'Risk (EUR)': [risk],  # Scalar wrapped in list
+            'Risk NLV (bps)': [(risk / NLV) * 10000],
+            'Rlzd PnL (EUR)': [rlzd_PnL],
+            'UnRlzdPnL(EUR)': [unrlzd_PnL],
+            'Exposure (EUR)': [exposure],  # Scalar wrapped in list
+            'Expos. NLV (%)': [exposure / NLV * 100],
+            'Stop or Trigger': [string_stops],
+            'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
+            'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
+            'multiplier': [multiplier],  # Scalar wrapped in list
+            'Last Price': [lastPX],  # Scalar wrapped in list
+            'ConID': [conid]  # Scalar wrapped in list
+        })
+
+        last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
 last_risk.to_csv("Q_Pareto_Transaction_History/Data/open_risks.csv")
 corr.to_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv")
