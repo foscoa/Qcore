@@ -1,11 +1,12 @@
 import pandas as pd
+import numpy as np
 
 """
     Function to load, clean, process, and aggregate trade data from a CSV file.
     Returns a cleaned and aggregated DataFrame.
     """
 
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04112025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04162025.csv"
 
 # Read the CSV file
 df = pd.read_csv(file_path)

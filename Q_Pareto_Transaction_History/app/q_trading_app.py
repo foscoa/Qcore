@@ -8,10 +8,11 @@ import numpy as np
 from dash.dash_table.Format import Format, Scheme, Sign, Group
 import isodate
 from ib_insync import *
+from pandas.core.groupby.base import transform_kernel_allowlist
 
 asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04142025.csv"
+file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04162025.csv"
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -43,278 +44,19 @@ def get_number_postions(df):
 def get_corr_matrix():
     return pd.read_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv", index_col=0)
 
-def get_journal_data_old(file_path):
-    """
-    Function to load, clean, process, and aggregate trade data from a CSV file.
-    Returns a cleaned and aggregated DataFrame.
-    """
-
-    # Read the CSV file
-    df = pd.read_csv(file_path)
-    df.columns = df.columns.str.replace("/", "_", regex=False)
-
-    master_df = df.copy().query('LevelOfDetail == "EXECUTION" & (Open_CloseIndicator == "C" or Open_CloseIndicator == "O")')
-
-    # clean DateTime
-    # Remove single quotes and replace ";" with a space
-    clean_date = master_df.DateTime.str.replace(";", " ")
-
-    # Convert to datetime in CET timezone
-    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format="%Y%m%d %H%M%S").dt.tz_localize(
-        'America/New_York').dt.tz_convert('Europe/Berlin').dt.tz_localize(None)
-
-    # Sort by Time
-    master_df = master_df.copy().sort_values(by='DateTime_clean', ascending=False)
-
-    # Adding FifoPnlRealzed in Base Currency
-    master_df['FifoPnlRealizedToBase'] = master_df.FifoPnlRealized * master_df.FXRateToBase
-
-    # Adding NotionaltoBase
-    master_df['NotionaltoBase'] = master_df.Quantity.abs() * master_df.Multiplier * master_df.FXRateToBase * master_df.TradePrice
-
-    # Direction
-    master_df['Position'] = master_df.Buy_Sell.map({'SELL': 'SHORT', 'BUY': 'LONG'})
-
-    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv',
-                                 header=0,
-                                 index_col=0)
-    # Mapping Symbol
-    master_df['Name'] = master_df.UnderlyingSymbol.map(symbol_mapping.name.to_dict())
-    master_df['Asset Class'] = master_df.UnderlyingSymbol.map(symbol_mapping.assetClass.to_dict())
-
-    # Display the first few rows
-    # Define the aggregation dictionary
-    agg_dict_IBOrderID = {
-        # **Categorical Columns**: Keep the first non-null occurrence (assuming they are the same within a group)
-        'ClientAccountID': 'first',
-        'CurrencyPrimary': 'first',
-        'Symbol': 'first',
-        'Description': 'first',
-        'Conid': 'first',
-        'SecurityID': 'first',
-        'ListingExchange': 'first',
-        'TradeID': lambda x: ', '.join(x.astype(str).unique()),  # Keep all unique TradeIDs
-        'Multiplier': 'first',
-        'Strike': 'first',
-        'Expiry': 'first',
-        'Put_Call': 'first',
-        'TradeDate': 'first',
-        'TransactionID': 'first',
-        'IBExecID': lambda x: ', '.join(x.astype(str).unique()),  # Keep unique executions
-        'OrderTime': lambda x: ', '.join(x.astype(str).unique()),  # Keep unique executions
-        'FXRateToBase': 'mean',  # Weighted average trade price,  # Averaging the FX rate makes sense
-        'AssetClass': 'first',
-        'Name': 'first',
-        'Asset Class': 'first',
-        'SubCategory': 'first',
-        'ISIN': 'first',
-        'FIGI': 'first',
-        'UnderlyingConid': 'first',
-        'UnderlyingSymbol': 'first',
-        'UnderlyingSecurityID': 'first',
-        'UnderlyingListingExchange': 'first',
-        'Issuer': 'first',
-        'IssuerCountryCode': 'first',
-        'ReportDate': 'first',
-        'DateTime': 'first',
-        'SettleDateTarget': 'first',
-        'TransactionType': 'first',
-        'Exchange': 'first',
-        'Open_CloseIndicator': 'first',
-        'Notes_Codes': 'first',
-        'Buy_Sell': 'first',
-        'BrokerageOrderID': 'first',
-        'ExtExecID': 'first',
-        'OpenDateTime': 'first',
-        'HoldingPeriodDateTime': 'first',
-        'LevelOfDetail': 'first',
-        'OrderType': 'first',
-        'DateTime_clean': 'first',
-        'Position': 'first',
-
-        # **Numerical Columns**: Use appropriate aggregations
-        'Quantity': 'sum',  # Sum of traded quantities
-        'TradePrice': 'mean',  # ,  # Weighted average trade price
-        'IBCommission': 'sum',  # Total commission paid
-        'CostBasis': 'sum',  # Aggregate cost basis
-        'NotionaltoBase': 'sum',  # Aggregate cost basis to base
-        'FifoPnlRealized': 'sum',  # Realized profit and loss
-        'FifoPnlRealizedToBase': 'sum',  # Realized PnL converted to base currency
-        'TradeMoney': 'sum',  # Total trade money
-        'Proceeds': 'sum',  # Total proceeds
-        'NetCash': 'sum',  # Net cash impact
-        'ClosePrice': 'mean',
-    }  # Average closing price
-
-    aggregated_df = master_df.copy().groupby(['IBOrderID']).agg(agg_dict_IBOrderID).reset_index().sort_values(by='DateTime_clean',
-                                                                                                    ascending=True)
-    filter_df = aggregated_df[[
-        # Basic Trade Information
-        'DateTime_clean',
-        'Symbol',
-        'Description',
-        'Name',
-
-        # Trade Metrics
-        'Quantity',
-        'TradePrice',
-        'NotionaltoBase',
-        'FifoPnlRealizedToBase',
-        'Multiplier',
-
-        # Financial Instrument Information
-        'Asset Class',
-        'AssetClass',
-        'CurrencyPrimary',
-        'FXRateToBase',
-        'Open_CloseIndicator',
-        'Position',
-
-        # Transaction Details
-        'IBOrderID',
-        'Conid',
-        'Exchange',
-    ]]
-
-    def aggregator(df_toBeGrouped):
-
-        df_aggregated = pd.DataFrame(columns=np.append(df_toBeGrouped.columns.values,
-                                                       ['first_entry_date', 'AvgClosePrice', 'AvgOpenPrice']))
-
-        for conid in df_toBeGrouped.Conid.unique():
-
-            df_toBeGrouped_conid = df_toBeGrouped.query('Conid == @conid')
-            # print(df_toBeGrouped_conid)
-
-            if bool(df_toBeGrouped_conid.Quantity.sum() == 0): # get only closed positions
-                df_toBeGrouped_conid['Q_cumsum'] = df_toBeGrouped_conid.copy().Quantity.cumsum()
-                idx_divisors = np.where(df_toBeGrouped_conid.Q_cumsum == 0)[0] + 1
-                idx_divisors = np.insert(idx_divisors, 0, 0)
-
-                for i in range(len(idx_divisors)-1):
-                    # print(i)
-                    slice = df_toBeGrouped_conid.iloc[(int(idx_divisors[i])):(int(idx_divisors[i+1])),]
-                    slice_close = slice.copy().query('Open_CloseIndicator == "C"')
-                    slice_open = slice.copy().query('Open_CloseIndicator == "O"')
-
-                    agg_dict_slice = {
-                    # **String Columns**: Use appropriate aggregation
-                    'DateTime_clean': 'last',
-                    # Concatenate unique values as a string
-                    'Symbol': 'first',  # Keep the first unique symbol
-                    'Description': 'first',  # Keep the first unique description
-                    'Name': 'first',  # Keep the first unique name
-                    'Open_CloseIndicator': 'first',  # Keep the first unique Open/Close indicator
-                    'IBOrderID': lambda x: ', '.join(x.astype(str).unique()),  # Concatenate unique IBOrderIDs
-                    'Conid': 'first',  # Keep the first Conid
-                    'Exchange': 'first',  # Keep the first exchange
-                    'Asset Class': 'first',  # Keep the first unique Asset Class
-                    'AssetClass': 'first',  # Keep the first unique Asset Class
-                    'CurrencyPrimary': 'first',  # Keep the first unique CurrencyPrimary
-                    'FXRateToBase': 'last',
-                    'Position': 'first',
-                    # Get the last FX rate to base (could be 'first' depending on your use case)
-
-                    # **Numerical Columns**: Use appropriate aggregation
-                    'Quantity': lambda x: x.abs().max(),  # Sum of the quantities
-                    'TradePrice': lambda x: ', '.join(x.astype(str).unique()),
-                    # Weighted average TradePrice
-                    'NotionaltoBase': 'max',  # Sum of Notional to Base
-                    'FifoPnlRealizedToBase': 'sum',  # Sum of Fifo PnL Realized to Base
-                    'Multiplier': 'first',  # Keep the first unique Multiplier (assuming it's constant for the group)
-                }
-
-                    slice_aggr = slice.copy().groupby('Conid').agg(agg_dict_slice)
-
-                    # create new columns
-                    slice_aggr['first_entry_date'] = slice.DateTime_clean.values[0]
-                    # print(slice_aggr['DateTime_clean'])
-                    slice_aggr['AvgClosePrice'] = (slice_close.TradePrice * slice_close.Quantity.abs()).sum() / slice_close.Quantity.abs().sum()
-                    slice_aggr['AvgOpenPrice'] = (slice_open.TradePrice * slice_open.Quantity.abs()).sum() / slice_open.Quantity.abs().sum()
-
-                    df_aggregated = pd.concat([df_aggregated, slice_aggr], ignore_index=True)
-
-        df_aggregated = df_aggregated.rename(columns={'DateTime_clean': 'last_exit_date'})
-
-        return df_aggregated
-
-    aggr2_df = aggregator(filter_df)
-
-    #
-
-
-
-    # Function to trim text to 11 characters and add "..."
-    aggr2_df.loc[:, 'Symbol'] = aggr2_df['Symbol'].apply(lambda x: x[:10] + '...' if len(x) > 10 else x)
-    aggr2_df.loc[:, 'Description'] = aggr2_df['Description'].apply(lambda x: x[:15] + '...' if len(x) > 15 else x)
-
-    aggr2_df['Trade Duration'] = aggr2_df.last_exit_date - aggr2_df.first_entry_date
-    aggr2_df['Seconds'] = aggr2_df['Trade Duration'].dt.total_seconds()
-
-    # Rename columns
-    aggr2_df = aggr2_df.rename(columns={   'CurrencyPrimary': 'CCY',
-                                           'FXRateToBase':'FX',
-                                           'AssetClass':'Instr.',
-                                           'TradePrice': 'Trade Price',
-                                           'FifoPnlRealizedToBase': 'Real.PnL(EUR)',
-                                           'NotionaltoBase': 'Notional(EUR)',
-                                           'first_entry_date': 'First Entry Date',
-                                           'last_exit_date': 'Last Exit Date',
-                                           'AvgClosePrice': 'Close Price (wAvg)',
-                                           'AvgOpenPrice': 'Open Price (wAvg)'})
-
-    aggr2_df = aggr2_df[[
-            "Last Exit Date",
-            "First Entry Date",
-            "Trade Duration",
-            "Name",
-            "Description",
-            "Asset Class",
-            "CCY",
-            "FX",
-            "Position",
-            "Quantity",
-            "Notional(EUR)",
-            "Real.PnL(EUR)",
-            "Open Price (wAvg)",
-            "Close Price (wAvg)",
-            # "Open_CloseIndicator",
-            "Multiplier",
-            "Instr.",
-            "Symbol",
-            "Exchange",
-            # "IBOrderID",
-            "Seconds",
-            "Conid"
-        ]]
-
-    def format_duration(duration):
-        if isinstance(duration, pd.Timedelta):  # If already a timedelta, format directly
-            days = duration.days
-            hours, remainder = divmod(duration.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-        elif isinstance(duration, str):  # If ISO 8601 string, parse it first
-            duration = isodate.parse_duration(duration)
-            days = duration.days
-            hours, remainder = divmod(duration.seconds, 3600)
-            minutes, seconds = divmod(remainder, 60)
-        else:
-            return "Invalid Duration"
-
-        return f"{days} days {hours:02}:{minutes:02}:{seconds:02}"
-
-    aggr2_df['Trade Duration'] = aggr2_df['Trade Duration'].apply(format_duration)
-    aggr2_df['Quantity'] = aggr2_df.Quantity.abs()
-
-
-    aggr2_df = aggr2_df.sort_values(by="Last Exit Date", ascending=False)
-
-    return aggr2_df
 
 def get_journal_data(file_path):
 
     aggregated_positions_df = pd.read_csv("Q_Pareto_Transaction_History/Data/aggregated_transaction_history.csv",
                                              index_col=0)
+
+    manual_entries = pd.read_excel(
+        'Q_Pareto_Transaction_History/Data/aggregated_transaction_history_manual_entries.xls', engine='xlrd')
+
+    # get rid of mone market trades
+    order_IDs = list(manual_entries[manual_entries.Scope != 'money market'].IBOrderID)
+    aggregated_positions_df = aggregated_positions_df.query('IBOrderID in @order_IDs')
+
     # Rename columns for clarity
     aggregated_positions_df.rename(columns={
         'CurrencyPrimary': 'CCY',
@@ -333,6 +75,7 @@ def get_journal_data(file_path):
 
     }, inplace=True)
 
+    # reorder the columns
     aggregated_positions_df = aggregated_positions_df[[
         "Last Exit Date",
         "First Entry Date",
@@ -362,7 +105,19 @@ def get_journal_data(file_path):
     return aggregated_positions_df.sort_values(by="Last Exit Date", ascending=False)
 
 def get_statistics():
-    return {"Win Rate": "60%", "Avg Profit": "$20", "Avg Loss": "$10"}
+
+    # transaction history
+    trans_hist = get_journal_data(file_path)
+
+    win_rate = (trans_hist['Real.PnL(EUR)'] > 0).sum()/(trans_hist['Real.PnL(EUR)'] > 0).count()
+
+    avg_profit = trans_hist[(trans_hist['Real.PnL(EUR)'] > 0)]['Real.PnL(EUR)'].mean()
+
+    avg_loss = trans_hist[(trans_hist['Real.PnL(EUR)'] <= 0)]['Real.PnL(EUR)'].mean()
+
+    return {"Win Rate": str(round(win_rate*100,2)) + "%",
+            "Avg Profit (EUR)": f"{int(avg_profit):,}".replace(",", "'"),
+            "Avg Loss (EUR)": f"{int(avg_loss):,}".replace(",", "'")}
 
 # Layout
 app.layout = html.Div([
@@ -401,15 +156,17 @@ def render_content(tab):
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.4~f')
             elif ((col["id"] == 'Risk (EUR)') | (col["id"] == 'Exposure (EUR)') |
-                  (col["id"] == 'UnRlzdPnL(EUR)') | (col["id"] == 'Rlzd PnL (EUR)')):
+                  (col["id"] == 'UnRlzdPnL(EUR)') | (col["id"] == 'Rlzd PnL (EUR)') |
+                  (col["id"] == 'Tot PnL (EUR)')):
                 col["type"] = "numeric"
                 col["format"] = Format(precision=2, scheme=Scheme.decimal_integer,
                                        group_delimiter="'", group=Group.yes, groups=[3])
-            elif (col["id"] == 'Risk NLV (bps)'):
+            elif ((col["id"] == 'Risk (bps)') | (col["id"] == 'Rlzd PnL (bps)') |
+                  (col["id"] == 'UnRlzdPnL(bps)') | (col["id"] == 'Tot PnL (bps)')):
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.0~f')
 
-            elif (col["id"] == 'Expos. NLV (%)'):
+            elif (col["id"] == 'Expos. (%)'):
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.2~f')
 
@@ -487,22 +244,12 @@ def render_content(tab):
                     'backgroundColor': '#F7B7B7',
                 },
                 {
-                    'if': {'filter_query': '{Rlzd PnL (EUR)} < 0', 'column_id': 'Rlzd PnL (EUR)'},
+                    'if': {'filter_query': '{Tot PnL (EUR)} < 0', 'column_id': 'Tot PnL (EUR)'},
                     'backgroundColor': '#F7B7B7',
                     'color': 'black',
                 },
                 {
-                    'if': {'filter_query': '{Rlzd PnL (EUR)} > 0', 'column_id': 'Rlzd PnL (EUR)'},
-                    'backgroundColor': '#A8E6A1',
-                    'color': 'black',
-                },
-                {
-                    'if': {'filter_query': '{UnRlzdPnL(EUR)} < 0', 'column_id': 'UnRlzdPnL(EUR)'},
-                    'backgroundColor': '#F7B7B7',
-                    'color': 'black',
-                },
-                {
-                    'if': {'filter_query': '{UnRlzdPnL(EUR)} > 0', 'column_id': 'UnRlzdPnL(EUR)'},
+                    'if': {'filter_query': '{Tot PnL (EUR)} > 0', 'column_id': 'Tot PnL (EUR)'},
                     'backgroundColor': '#A8E6A1',
                     'color': 'black',
                 },
@@ -644,13 +391,6 @@ def render_content(tab):
                 style_table={'overflowX': 'auto', "border": "1px solid #ddd"},
                 style_header={'backgroundColor': "rgb(18,54,90)", 'color': 'white', 'fontWeight': 'bold'},
                 style_data={'backgroundColor': '#ecf0f1', 'color': '#2c3e50'}
-            ),
-            dcc.Graph(
-                figure=px.line(
-                    pd.DataFrame({"Date": ["2025-03-05", "2025-03-06", "2025-03-07"], "Equity": [1000, 1020, 1050]}),
-                    x="Date", y="Equity", title="Equity Curve",
-                    line_shape='spline', template='plotly_dark'
-                )
             )
         ])
 
