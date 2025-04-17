@@ -6,6 +6,10 @@ import plotly.figure_factory as ff
 import os
 import numpy as np
 from dash.dash_table.Format import Format, Scheme, Sign, Group
+from scipy.stats import gaussian_kde
+from math import floor
+
+import plotly.graph_objects as go
 import isodate
 from ib_insync import *
 from pandas.core.groupby.base import transform_kernel_allowlist
@@ -104,6 +108,99 @@ def get_journal_data(file_path):
     # Return the cleaned and aggregated DataFrame
     return aggregated_positions_df.sort_values(by="Last Exit Date", ascending=False)
 
+def plot_return_distribution(trans_hist):
+    # Plot
+    # Set fixed bin width to 1.5k EUR
+    bin_width = 1500
+
+    # Calculate bin range
+    x_min = trans_hist['Real.PnL(EUR)'].min()
+    x_max = trans_hist['Real.PnL(EUR)'].max()
+
+    start = bin_width * np.floor(x_min / bin_width)
+    end = bin_width * np.ceil(x_max / bin_width)
+
+    # Split data by sign
+    neg_values = trans_hist[trans_hist['Real.PnL(EUR)'] < 0]['Real.PnL(EUR)']
+    pos_values = trans_hist[trans_hist['Real.PnL(EUR)'] >= 0]['Real.PnL(EUR)']
+
+    # Create figure
+    fig = go.Figure()
+
+    # Histogram: PnL < 0
+    fig.add_trace(go.Histogram(
+        x=neg_values,
+        xbins=dict(start=start, end=end, size=bin_width),
+        marker=dict(color='#F7B7B7', line=dict(color='black', width=1)),
+        name='PnL < 0',
+        opacity=0.75,
+        showlegend=False
+    ))
+
+    # Histogram: PnL ≥ 0
+    fig.add_trace(go.Histogram(
+        x=pos_values,
+        xbins=dict(start=start, end=end, size=bin_width),
+        marker=dict(color='#A8E6A1', line=dict(color='black', width=1)),
+        name='PnL ≥ 0',
+        opacity=0.75,
+        showlegend=False
+    )),
+
+    # KDE curve
+    kde = gaussian_kde(trans_hist['Real.PnL(EUR)'])
+    x_vals = np.linspace(start, end, 500)
+    y_vals = kde(x_vals)
+
+    # Scale KDE to match histogram height (rough approximation)
+    hist_counts, _ = np.histogram(trans_hist['Real.PnL(EUR)'], bins=np.arange(start, end + bin_width, bin_width))
+    scale_factor = hist_counts.max() / y_vals.max()
+    y_scaled = y_vals * scale_factor
+
+    # Add KDE curve
+    fig.add_trace(go.Scatter(
+        x=x_vals,
+        y=y_scaled,
+        mode='lines',
+        line=dict(color='black', width=0.5),
+        name='Estimated Density',
+        showlegend=False
+    ))
+
+    # Vertical line at zero
+    # ymax = np.histogram(trans_hist['Real.PnL(EUR)'], bins=np.arange(start, end + bin_width, bin_width))[0].max()
+
+    # fig.add_shape(
+    #     type="line",
+    #     x0=0, x1=0,
+    #     y0=0, y1=ymax,
+    #     line=dict(color="red", width=2, dash="dash")
+    # )
+
+    # Layout settings
+    fig.update_layout(
+        title=dict(
+            text="PnL Distribution (EUR)",
+            x=0.0,
+            font=dict(
+                size=15,  # You can adjust the font size
+                color="black",  # You can adjust the color
+                family="Arial, sans-serif",  # Optional: specify the font family
+                weight="bold"  # Makes the title bold
+            )
+        ),
+        barmode='overlay',
+        xaxis_title="PnL (EUR)",
+        yaxis_title="Number of Trades",
+        template="plotly_white",
+        margin=dict(l=20, r=20, t=25, b=20),
+        # height=500,
+        paper_bgcolor="#f8f9fa",  # Background color of the entire figure
+        plot_bgcolor="#f8f9fa"  # Background color of the plot area
+    )
+
+    return fig
+
 def get_statistics():
 
     # transaction history
@@ -115,9 +212,35 @@ def get_statistics():
 
     avg_loss = trans_hist[(trans_hist['Real.PnL(EUR)'] <= 0)]['Real.PnL(EUR)'].mean()
 
-    return {"Win Rate": str(round(win_rate*100,2)) + "%",
+    # all trades
+    avg_duration_days = trans_hist.Seconds.mean()/(60*60*24)
+    avg_duration_days_str = str(floor(avg_duration_days)) + "d" + \
+                            str(int((avg_duration_days - floor(avg_duration_days))*24)) + "h"
+
+    # avg duration profits
+    avg_duration_days_P = trans_hist[(trans_hist['Real.PnL(EUR)'] > 0)].Seconds.mean() / (60 * 60 * 24)
+    avg_duration_days_str_P = str(floor(avg_duration_days_P)) + "d" + \
+                            str(int((avg_duration_days_P - floor(avg_duration_days_P)) * 24)) + "h"
+
+    # avg duration losses
+    avg_duration_days_L = trans_hist[(trans_hist['Real.PnL(EUR)'] <= 0)].Seconds.mean() / (60 * 60 * 24)
+    avg_duration_days_str_L = str(floor(avg_duration_days_L)) + "d" + \
+                            str(int((avg_duration_days_L - floor(avg_duration_days_L)) * 24)) + "h"
+
+    # % Profits Top 15%
+    n_top = int(len(trans_hist['Real.PnL(EUR)']) * 0.15)
+    top_15_percent = trans_hist['Real.PnL(EUR)'].nlargest(n_top).sum()/trans_hist['Real.PnL(EUR)'][(trans_hist['Real.PnL(EUR)'] > 0)].sum()
+
+    return {"Number of Trades": str((trans_hist['Real.PnL(EUR)'] != 0).count()),
+            "Win Rate": str(round(win_rate*100,2)) + "%",
             "Avg Profit (EUR)": f"{int(avg_profit):,}".replace(",", "'"),
-            "Avg Loss (EUR)": f"{int(avg_loss):,}".replace(",", "'")}
+            "Avg Loss (EUR)": f"{int(avg_loss):,}".replace(",", "'"),
+            "Ratio win/loss size": str(round(avg_profit/abs(avg_loss),2)),
+            "% Profits Top 15%": str(round(top_15_percent*100,2)) + "%",
+            "Pareto Ratio": str(round(top_15_percent/0.85,2)),
+            "Avg Trade Duration": avg_duration_days_str,
+            "Avg Trade Duration (Profits)": avg_duration_days_str_P,
+            "Avg Trade Duration (Losses)": avg_duration_days_str_L}
 
 # Layout
 app.layout = html.Div([
@@ -383,15 +506,24 @@ def render_content(tab):
         ])
     elif tab == 'stats':
         stats = get_statistics()
-        df_stats = pd.DataFrame(list(stats.items()), columns=["Metric", "Value"])
+        df_stats = pd.DataFrame(list(stats.items()), columns=["Metric", "2025"])
         return html.Div([
             dash_table.DataTable(
                 data=df_stats.to_dict('records'),
                 columns=[{"name": i, "id": i} for i in df_stats.columns],
-                style_table={'overflowX': 'auto', "border": "1px solid #ddd"},
+                style_table={
+                    'overflowX': 'auto',
+                    'overflowY': 'auto',
+                    'width': '450px',  # Fixed width
+                    'border': "1px solid #ddd"
+                },
                 style_header={'backgroundColor': "rgb(18,54,90)", 'color': 'white', 'fontWeight': 'bold'},
                 style_data={'backgroundColor': '#ecf0f1', 'color': '#2c3e50'}
-            )
+            ),
+            html.Br(),
+            html.Br(),
+            dcc.Graph(figure=plot_return_distribution(get_journal_data(file_path)),
+                      style={'width': '900px', 'height': '450px'})
         ])
 
 # Run server

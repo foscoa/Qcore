@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04162025.csv"
+    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04172025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
