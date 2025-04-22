@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04172025.csv"
+    file_path = "Q_Pareto_Transaction_History_PROD/Data/U15721173_TradeHistory_04172025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -39,7 +39,7 @@ def get_realized_PnL():
     # Direction
     master_df['Position'] = master_df.Buy_Sell.map({'SELL': 'SHORT', 'BUY': 'LONG'})
 
-    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv',
+    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_PROD/Data/mapping/symbol_mapping.csv',
                                  header=0,
                                  index_col=0)
     # Mapping Symbol
@@ -219,9 +219,9 @@ risk_df = positions_df.merge(orders_df, on=['ConID', 'Symbol', 'Local Symbol',
                                             'SecType', 'Exchange', 'Currency', 'Multiplier'],
                                         how='outer', suffixes=('_Position', '_Order'))
 
-symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv',
-                                 header=0,
-                                 index_col=0)
+symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_PROD/Data/mapping/symbol_mapping.csv',
+                             header=0,
+                             index_col=0)
 
 risk_df['Name'] = risk_df.Symbol.map(symbol_mapping.name.to_dict())
 risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
@@ -626,8 +626,8 @@ for conid in risk_df['ConID'].unique():
 
 
 
-last_risk.to_csv("Q_Pareto_Transaction_History/Data/open_risks.csv")
-corr.to_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv")
+last_risk.to_csv("Q_Pareto_Transaction_History_PROD/Data/open_risks.csv")
+corr.to_csv("Q_Pareto_Transaction_History_PROD/Data/corr_matrix.csv")
 
 # Disconnect from IBKR
 ib.disconnect()

@@ -7,7 +7,7 @@ import numpy as np
 from dash.dash_table.Format import Format, Scheme, Sign, Group
 import isodate
 
-asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
+asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History_PROD\\app\\assets\\images\\")
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -26,7 +26,7 @@ def get_sample_data():
 
 def get_journal_data():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_03132025.csv"
+    file_path = "Q_Pareto_Transaction_History_PROD/Data/U15721173_TradeHistory_03132025.csv"
 
     # Read the CSV file
     df = pd.read_csv(file_path)
@@ -54,7 +54,7 @@ def get_journal_data():
     # Direction
     master_df['Position'] = master_df.Buy_Sell.map({'BUY': 'SHORT', 'SELL': 'LONG'})
 
-    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv',
+    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_PROD/Data/mapping/symbol_mapping.csv',
                                  header=0,
                                  index_col=0)
     # Mapping Symbol

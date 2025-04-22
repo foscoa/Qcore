@@ -14,17 +14,18 @@ import isodate
 from ib_insync import *
 from pandas.core.groupby.base import transform_kernel_allowlist
 
-asst_path = os.path.join(os.getcwd(), "\\Q_Pareto_Transaction_History\\app\\assets\\images\\")
+
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04162025.csv"
+file_path = "Q_Pareto_Transaction_History_PROD/Data/U15721173_TradeHistory_04162025.csv"
 
 # Initialize app
-app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Q - PT Trading Overview"
+asst_path = os.path.join(os.getcwd(), app.get_asset_url('QCORE_Logo.jpg'))
 
 # Sample DataFrames
 def get_sample_data():
-    return pd.read_csv("Q_Pareto_Transaction_History/Data/open_risks.csv", index_col=0)
+    return pd.read_csv("Q_Pareto_Transaction_History_PROD/Data/open_risks.csv", index_col=0)
 
 sample_data = get_sample_data()
 # summary table:
@@ -46,16 +47,16 @@ def get_number_postions(df):
     return nr_positions
 
 def get_corr_matrix():
-    return pd.read_csv("Q_Pareto_Transaction_History/Data/corr_matrix.csv", index_col=0)
+    return pd.read_csv("Q_Pareto_Transaction_History_PROD/Data/corr_matrix.csv", index_col=0)
 
 
 def get_journal_data(file_path):
 
-    aggregated_positions_df = pd.read_csv("Q_Pareto_Transaction_History/Data/aggregated_transaction_history.csv",
+    aggregated_positions_df = pd.read_csv("Q_Pareto_Transaction_History_PROD/Data/aggregated_transaction_history.csv",
                                              index_col=0)
 
     manual_entries = pd.read_excel(
-        'Q_Pareto_Transaction_History/Data/aggregated_transaction_history_manual_entries.xls', engine='xlrd')
+        'Q_Pareto_Transaction_History_PROD/Data/aggregated_transaction_history_manual_entries.xls', engine='xlrd')
 
     # get rid of mone market trades
     order_IDs = list(manual_entries[manual_entries.Scope != 'money market'].IBOrderID)
@@ -246,9 +247,9 @@ def get_statistics():
 app.layout = html.Div([
     html.Div([
         # TODO: add QCORE logo
-        # html.Img(src="QCORE_Logo.jpeg",
-        #          style={"width": "150px", "margin": "auto", "display": "block"}
-        # )
+        # html.Img(src="../assets/QCORE_Logo.jpg",
+        #         style={"width": "150px", "margin": "auto", "display": "block"}
+        #         )
     ]),
     dcc.Tabs(id='tabs', value='open_risks', children=[
         dcc.Tab(label='Open Risks', value='open_risks', style={"backgroundColor": "#ecf0f1", "padding": "10px"}),

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 # Define the file path
-file_path = "Q_Pareto_Transaction_History/Data/TradeHistory_raw.csv"
+file_path = "Q_Pareto_Transaction_History_PROD/Data/TradeHistory_raw.csv"
 
 # Read the CSV file
 df = pd.read_csv(file_path)

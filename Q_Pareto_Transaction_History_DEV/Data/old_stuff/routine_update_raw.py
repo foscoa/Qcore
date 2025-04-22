@@ -5,8 +5,8 @@ import os
 import datetime
 
 # Define the file path raw data
-file_path_raw = "Q_Pareto_Transaction_History/Data/TradeHistory_raw.csv"
-file_path_archive = "Q_Pareto_Transaction_History/Data/Archive"
+file_path_raw = "Q_Pareto_Transaction_History_PROD/Data/TradeHistory_raw.csv"
+file_path_archive = "Q_Pareto_Transaction_History_PROD/Data/Archive"
 
 # Get list of files
 folder_path = Path(file_path_archive)
@@ -39,7 +39,7 @@ assert first_date_new > max_date_raw, 'The first date in the new data is older t
 assert bool((df_raw.columns == df_new.columns).sum()), 'The new and old dfs have different columns'
 
 df_to_write = pd.concat([df_new, df_raw], axis=0, ignore_index=True)
-df_to_write.to_csv("Q_Pareto_Transaction_History/Data/TradeHistory_raw.csv", index=False)  # index=False prevents writing row indices)
+df_to_write.to_csv("Q_Pareto_Transaction_History_PROD/Data/TradeHistory_raw.csv", index=False)  # index=False prevents writing row indices)
 
 
 

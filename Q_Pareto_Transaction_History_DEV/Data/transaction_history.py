@@ -6,7 +6,7 @@ import numpy as np
     Returns a cleaned and aggregated DataFrame.
     """
 
-file_path = "Q_Pareto_Transaction_History/Data/U15721173_TradeHistory_04172025.csv"
+file_path = "Q_Pareto_Transaction_History_PROD/Data/U15721173_TradeHistory_04172025.csv"
 
 # Read the CSV file
 df = pd.read_csv(file_path)
@@ -35,7 +35,7 @@ trade_df['NotionalToBase'] = trade_df['Quantity'] * trade_df['Multiplier'] * tra
 trade_df['Position'] = trade_df['Buy_Sell'].map({'SELL': 'SHORT', 'BUY': 'LONG'})
 
 # Load symbol mapping file
-symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History/Data/mapping/symbol_mapping.csv', index_col=0)
+symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_PROD/Data/mapping/symbol_mapping.csv', index_col=0)
 
 # Map underlying symbols to asset classes and names
 trade_df['Name'] = trade_df['UnderlyingSymbol'].map(symbol_mapping['name'].to_dict())
@@ -169,4 +169,4 @@ def format_duration(duration):
 
 
 aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuration'].apply(format_duration)
-aggregated_positions_df.to_csv("Q_Pareto_Transaction_History/Data/aggregated_transaction_history.csv")
+aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_PROD/Data/aggregated_transaction_history.csv")
