@@ -46,13 +46,13 @@ app.layout = dbc.Container([
 # Callback to update the graph and summary
 @app.callback(
     Output('histogram', 'figure'),
-    Output('summary', 'children'),
-    Input('num_simulations', 'value'),
-    Input('num_trades', 'value'),
-    Input('win_rate', 'value'),
-    Input('avg_win', 'value'),
-    Input('avg_loss', 'value'),
-    Input('target_return', 'value'),
+        Output('summary', 'children'),
+        Input('num_simulations', 'value'),
+        Input('num_trades', 'value'),
+        Input('win_rate', 'value'),
+        Input('avg_win', 'value'),
+        Input('avg_loss', 'value'),
+        Input('target_return', 'value'),
 )
 def update_graph(num_simulations, num_trades, win_rate, avg_win, avg_loss, target_return):
     # Handle None inputs with default fallbacks

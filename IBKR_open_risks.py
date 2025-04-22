@@ -10,7 +10,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_PROD/Data/U15721173_TradeHistory_04172025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04222025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -39,7 +39,7 @@ def get_realized_PnL():
     # Direction
     master_df['Position'] = master_df.Buy_Sell.map({'SELL': 'SHORT', 'BUY': 'LONG'})
 
-    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_PROD/Data/mapping/symbol_mapping.csv',
+    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symbol_mapping.csv',
                                  header=0,
                                  index_col=0)
     # Mapping Symbol
@@ -219,7 +219,7 @@ risk_df = positions_df.merge(orders_df, on=['ConID', 'Symbol', 'Local Symbol',
                                             'SecType', 'Exchange', 'Currency', 'Multiplier'],
                                         how='outer', suffixes=('_Position', '_Order'))
 
-symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_PROD/Data/mapping/symbol_mapping.csv',
+symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symbol_mapping.csv',
                              header=0,
                              index_col=0)
 
@@ -332,7 +332,7 @@ defect_ids = list(nans_lastPX_Ids.keys())
 contracts_quoted_USd = {526262864: 100,
                         565301283: 100,
                         577421489: 100,
-                        532513462: 100,
+                        532513438: 100,
                         #656391483: 100
 }
 
@@ -429,205 +429,177 @@ for conid in risk_df['ConID'].unique():
     lastPX = float(sub_df.LastPX.unique()[0])
     fx = float(sub_df['FX Rate to Base'].unique()[0])
 
+    sub_df_iter = [sub_df]
 
-    if sub_df.Position.isna().sum() == len(sub_df):
-        position_status = "working"
-    else:
-        position_status = "open"
+    # hybrid orders
+    hybrid_IDs = [727764322, # GBS
+                  304037456  # CL
+                ]
+    if conid in hybrid_IDs:
+        open_q = abs(sub_df.Position.dropna().values[0])
+        open_sub_df = sub_df[(sub_df.Quantity.isna()) | (sub_df.Quantity == open_q)]
+        working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
+        sub_df_iter = [open_sub_df, working_sub_df]
 
-    if flag_notOpen and flag_filledANDcanc:
-        position_status = "closed"
 
-    if position_status == "open":
-        open_position = abs(sub_df.Position.dropna().sum())
-        exposure = open_position * multiplier * lastPX / fx
-        if risk_df[risk_df.ConID == conid].SecType.values[0] == 'WAR':
-            exposure = (sub_df.Position * sub_df.LastPX).values[0]
+    for sub_df in sub_df_iter:
 
-        rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]/fx
-        if conid in df_open_rzld_pnl.index:
-            rlzd_PnL += df_open_rzld_pnl[conid]
-        unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0]/fx
+        if sub_df.Position.isna().sum() == len(sub_df):
+            position_status = "working"
+        else:
+            position_status = "open"
 
-        stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
+        if flag_notOpen and flag_filledANDcanc:
+            position_status = "closed"
 
-        if not stops.empty: # there are stops
-            if open_position > 0: # long
-                stops = stops.sort_values(by='Stop Price', ascending=False)
-            elif open_position < 0: # short
-                stops = stops.sort_values(by='Stop Price', ascending=True)
+        if position_status == "open":
+            open_position = abs(sub_df.Position.dropna().sum())
+            exposure = open_position * multiplier * lastPX / fx
+            if risk_df[risk_df.ConID == conid].SecType.values[0] == 'WAR':
+                exposure = (sub_df.Position * sub_df.LastPX).values[0]
 
-            string_stops = ('P: ' + stops['Stop Price'].round(3).astype(str) + ', Q: ' + stops['Quantity'].astype(int).astype(str) + \
-                        ', Dist: ' + (abs(lastPX - stops['Stop Price']) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
+            rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0] / fx
+            if conid in df_open_rzld_pnl.index:
+                rlzd_PnL += df_open_rzld_pnl[conid]
+            unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] / fx
 
-            stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
+            stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
 
-            if list(stops.Action)[0] == 'BUY':
-                position = 'SHORT'
-            else:
-                position = 'LONG'
+            if not stops.empty:  # there are stops
+                if open_position > 0:  # long
+                    stops = stops.sort_values(by='Stop Price', ascending=False)
+                elif open_position < 0:  # short
+                    stops = stops.sort_values(by='Stop Price', ascending=True)
 
-            stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price']) / fx
-            risk = abs(exposure - stops_exec_exp.sum())
-
-        elif stops.empty: # no stops
-            string_stops = ''
-            if portfolio_df[portfolio_df.ConID == conid].Position.values > 0:
-                position = 'LONG'
-            else:
-                position = 'SHORT'
-            risk = exposure
-
-        new_row = pd.DataFrame(data={
-            'Status': [position_status],
-            'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
-            'FX': [fx],  # Scalar wrapped in list
-            'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
-            'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
-            'Name': [sub_df.Name.unique()[0]],
-            'Asset Class': [sub_df['Asset Class'].unique()[0]],
-            'Position': [position],
-            'Contracts': [open_position],  # Scalar wrapped in list
-            'Risk (EUR)': [risk],  # Scalar wrapped in list
-            'Risk (bps)': [(risk / NLV) * 10000],
-            'Rlzd PnL (EUR)': [rlzd_PnL],
-            'Rlzd PnL (bps)': [(rlzd_PnL/ NLV) * 10000],
-            'UnRlzdPnL(EUR)': [unrlzd_PnL],
-            'UnRlzdPnL(bps)': [(unrlzd_PnL / NLV) * 10000],
-            'Tot PnL (EUR)': [rlzd_PnL + unrlzd_PnL],
-            'Tot PnL (bps)': [((rlzd_PnL + unrlzd_PnL)/ NLV) * 10000],
-            'Exposure (EUR)': [exposure],  # Scalar wrapped in list
-            'Expos. (%)': [exposure / NLV * 100],
-            'Stop or Trigger': [string_stops],
-            'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
-            'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
-            'multiplier': [multiplier],  # Scalar wrapped in list
-            'Last Price': [lastPX],  # Scalar wrapped in list
-            'ConID': [conid]  # Scalar wrapped in list
-        })
-
-        last_risk = pd.concat([last_risk, new_row], ignore_index=True)
-
-    elif position_status == "working":
-        exposure = 0
-        open_position = 0
-        rlzd_PnL = 0
-        unrlzd_PnL = 0
-
-        groups = {k: v for k, v in sub_df.groupby('Quantity')}
-
-        for order in groups.values():
-
-            order = order.sort_values(by='PermID')
-            stops = order[(order['Status'] == 'PreSubmitted') & (order['Order Type'] == 'STP')].reset_index()  # get rid of taking profit orders
-
-            if not stops.empty:
-                if len(stops.Action.unique()) == 1:
-                    triggers = order[((order['Status'] == 'Submitted') & (order['Order Type'].isin(['LMT', 'STP LMT']))) |((order['Status'] == 'PreSubmitted') & (order['Order Type'].isin(['STP LMT'])))].reset_index()
-                    type = 'Limit Price'
-                else:
-                    triggers = stops[stops.Action == stops.Action.unique()[0]].reset_index()
-                    stops = stops[stops.Action != stops.Action.unique()[0]].reset_index()
-                    type = 'Stop Price'
+                string_stops = ('P: ' + stops['Stop Price'].round(3).astype(str) + ', Q: ' + stops['Quantity'].astype(
+                    int).astype(str) + \
+                                ', Dist: ' + (abs(lastPX - stops['Stop Price']) / lastPX * 100).round(2).astype(
+                            str) + '%').str.cat(sep=' | ')
 
                 stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
 
-                if list(stops.Action)[0] == 'SELL':
+                if list(stops.Action)[0] == 'BUY':
+                    position = 'SHORT'
+                else:
+                    position = 'LONG'
+
+                stops_exec_exp = stops.Quantity * multiplier * (stops['Stop Price']) / fx
+                risk = abs(exposure - stops_exec_exp.sum())
+
+            elif stops.empty:  # no stops
+                string_stops = ''
+                if portfolio_df[portfolio_df.ConID == conid].Position.values > 0:
                     position = 'LONG'
                 else:
                     position = 'SHORT'
+                risk = exposure
 
-                string_stops = ('P: ' + triggers[type].round(3).astype(str) + ', Q: ' + triggers['Quantity'].astype(int).astype(str) + \
-                        ', Dist: ' + (abs(lastPX - triggers[type]) / lastPX * 100).round(2).astype(str) + '%').str.cat(sep=' | ')
+            new_row = pd.DataFrame(data={
+                'Status': [position_status],
+                'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+                'FX': [fx],  # Scalar wrapped in list
+                'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
+                'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
+                'Name': [sub_df.Name.unique()[0]],
+                'Asset Class': [sub_df['Asset Class'].unique()[0]],
+                'Position': [position],
+                'Contracts': [open_position],  # Scalar wrapped in list
+                'Risk (EUR)': [risk],  # Scalar wrapped in list
+                'Risk (bps)': [(risk / NLV) * 10000],
+                'Rlzd PnL (EUR)': [rlzd_PnL],
+                'Rlzd PnL (bps)': [(rlzd_PnL / NLV) * 10000],
+                'UnRlzdPnL(EUR)': [unrlzd_PnL],
+                'UnRlzdPnL(bps)': [(unrlzd_PnL / NLV) * 10000],
+                'Tot PnL (EUR)': [rlzd_PnL + unrlzd_PnL],
+                'Tot PnL (bps)': [((rlzd_PnL + unrlzd_PnL) / NLV) * 10000],
+                'Exposure (EUR)': [exposure],  # Scalar wrapped in list
+                'Expos. (%)': [exposure / NLV * 100],
+                'Stop or Trigger': [string_stops],
+                'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
+                'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
+                'multiplier': [multiplier],  # Scalar wrapped in list
+                'Last Price': [lastPX],  # Scalar wrapped in list
+                'ConID': [conid]  # Scalar wrapped in list
+            })
 
-                risk = (stops.Quantity * multiplier * (stops['Stop Price'] - triggers[type]) * stops.dir).sum() / fx
+            last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
-                new_row = pd.DataFrame(data={
-                    'Status': [position_status],
-                    'Currency': [stops.Currency.unique()[0]],  # Make sure it's a list
-                    'FX': [fx],  # Scalar wrapped in list
-                    'Symbol': [stops.Symbol.unique()[0]],  # Make sure it's a list
-                    'Local Symbol': [stops['Local Symbol'].unique()[0]],  # Make sure it's a list
-                    'Name': [stops.Name.unique()[0]],
-                    'Asset Class': [stops['Asset Class'].unique()[0]],
-                    'Position': [position],
-                    'Contracts': [open_position],  # Scalar wrapped in list
-                    'Risk (EUR)': [risk],  # Scalar wrapped in list
-                    'Risk (bps)': [(risk / NLV) * 10000],
-                    'Rlzd PnL (EUR)': [rlzd_PnL],
-                    'Rlzd PnL (bps)': [(rlzd_PnL/ NLV) * 10000],
-                    'UnRlzdPnL(EUR)': [unrlzd_PnL],
-                    'UnRlzdPnL(bps)': [(unrlzd_PnL / NLV) * 10000],
-                    'Tot PnL (EUR)': [rlzd_PnL + unrlzd_PnL],
-                    'Tot PnL (bps)': [((rlzd_PnL + unrlzd_PnL)/ NLV) * 10000],
-                    'Exposure (EUR)': [exposure],  # Scalar wrapped in list
-                    'Expos. (%)': [exposure / NLV * 100],
-                    'Stop or Trigger': [string_stops],
-                    'ATR 30D': [ATR_30.get(stops.Symbol.unique()[0], np.nan)],
-                    'ATR 30D (%)': [ATR_30.get(stops.Symbol.unique()[0], np.nan) / lastPX],
-                    'multiplier': [multiplier],  # Scalar wrapped in list
-                    'Last Price': [lastPX],  # Scalar wrapped in list
-                    'ConID': [conid]  # Scalar wrapped in list
-                })
+        elif position_status == "working":
+            exposure = 0
+            open_position = 0
+            rlzd_PnL = 0
+            unrlzd_PnL = 0
 
-                last_risk = pd.concat([last_risk, new_row], ignore_index=True)
+            groups = {k: v for k, v in sub_df.groupby('Quantity')}
 
-    elif position_status == "closed":
-        exposure = 0
-        open_position = 0
-        risk = 0
-        unrlzd_PnL = 0
-        string_stops = np.nan
+            for order in groups.values():
 
+                order = order.sort_values(by='PermID')
+                stops = order[(order['Status'] == 'PreSubmitted') & (
+                            order['Order Type'] == 'STP')].reset_index()  # get rid of taking profit orders
 
-        rlzd_PnL = 0
-        for fill in orders_df.query('ConID == @conid').Fills:
-            if fill == []:
-                continue
-            rlzd_PnL += fill[0].commissionReport.realizedPNL
+                if not stops.empty:
+                    if len(stops.Action.unique()) == 1:
+                        triggers = order[
+                            ((order['Status'] == 'Submitted') & (order['Order Type'].isin(['LMT', 'STP LMT', 'STP']))) | (
+                                        (order['Status'] == 'PreSubmitted') & (
+                                    order['Order Type'].isin(['STP LMT'])))].reset_index()
+                        if (triggers['Limit Price'] != 0).values:
+                            type = 'Limit Price'
+                        else:
+                            type = 'Stop Price'
 
-        rlzd_PnL += df_open_rzld_pnl[conid]
+                    else:
+                        triggers = stops[stops.Action == stops.Action.unique()[0]].reset_index()
+                        stops = stops[stops.Action != stops.Action.unique()[0]].reset_index()
+                        type = 'Stop Price'
 
-        if list(sub_df.Action)[-1] == 'SELL':
-            position = 'LONG'
-        else:
-            position = 'SHORT'
+                    stops['dir'] = stops['Action'].map({'SELL': -1, 'BUY': 1})
 
-        new_row = pd.DataFrame(data={
-            'Status': [position_status],
-            'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
-            'FX': [fx],  # Scalar wrapped in list
-            'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
-            'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
-            'Name': [sub_df.Name.unique()[0]],
-            'Asset Class': [sub_df['Asset Class'].unique()[0]],
-            'Position': [position],
-            'Contracts': [open_position],  # Scalar wrapped in list
-            'Risk (EUR)': [risk],  # Scalar wrapped in list
-            'Risk (bps)': [(risk / NLV) * 10000],
-            'Rlzd PnL (EUR)': [rlzd_PnL],
-            'Rlzd PnL (bps)': [(rlzd_PnL/ NLV) * 10000],
-            'UnRlzdPnL(EUR)': [unrlzd_PnL],
-            'UnRlzdPnL(bps)': [(unrlzd_PnL / NLV) * 10000],
-            'Tot PnL (EUR)': [rlzd_PnL + unrlzd_PnL],
-            'Tot PnL (bps)': [((rlzd_PnL + unrlzd_PnL)/ NLV) * 10000],
-            'Exposure (EUR)': [exposure],  # Scalar wrapped in list
-            'Expos. (%)': [exposure / NLV * 100],
-            'Stop or Trigger': [string_stops],
-            'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
-            'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
-            'multiplier': [multiplier],  # Scalar wrapped in list
-            'Last Price': [lastPX],  # Scalar wrapped in list
-            'ConID': [conid]  # Scalar wrapped in list
-        })
+                    if list(stops.Action)[0] == 'SELL':
+                        position = 'LONG'
+                    else:
+                        position = 'SHORT'
 
-        last_risk = pd.concat([last_risk, new_row], ignore_index=True)
+                    string_stops = ('P: ' + triggers[type].round(3).astype(str) + ', Q: ' + triggers['Quantity'].astype(
+                        int).astype(str) + \
+                                    ', Dist: ' + (abs(lastPX - triggers[type]) / lastPX * 100).round(2).astype(
+                                str) + '%').str.cat(sep=' | ')
 
+                    risk = (stops.Quantity * multiplier * (stops['Stop Price'] - triggers[type]) * stops.dir).sum() / fx
 
+                    new_row = pd.DataFrame(data={
+                        'Status': [position_status],
+                        'Currency': [stops.Currency.unique()[0]],  # Make sure it's a list
+                        'FX': [fx],  # Scalar wrapped in list
+                        'Symbol': [stops.Symbol.unique()[0]],  # Make sure it's a list
+                        'Local Symbol': [stops['Local Symbol'].unique()[0]],  # Make sure it's a list
+                        'Name': [stops.Name.unique()[0]],
+                        'Asset Class': [stops['Asset Class'].unique()[0]],
+                        'Position': [position],
+                        'Contracts': [open_position],  # Scalar wrapped in list
+                        'Risk (EUR)': [risk],  # Scalar wrapped in list
+                        'Risk (bps)': [(risk / NLV) * 10000],
+                        'Rlzd PnL (EUR)': [rlzd_PnL],
+                        'Rlzd PnL (bps)': [(rlzd_PnL / NLV) * 10000],
+                        'UnRlzdPnL(EUR)': [unrlzd_PnL],
+                        'UnRlzdPnL(bps)': [(unrlzd_PnL / NLV) * 10000],
+                        'Tot PnL (EUR)': [rlzd_PnL + unrlzd_PnL],
+                        'Tot PnL (bps)': [((rlzd_PnL + unrlzd_PnL) / NLV) * 10000],
+                        'Exposure (EUR)': [exposure],  # Scalar wrapped in list
+                        'Expos. (%)': [exposure / NLV * 100],
+                        'Stop or Trigger': [string_stops],
+                        'ATR 30D': [ATR_30.get(stops.Symbol.unique()[0], np.nan)],
+                        'ATR 30D (%)': [ATR_30.get(stops.Symbol.unique()[0], np.nan) / lastPX],
+                        'multiplier': [multiplier],  # Scalar wrapped in list
+                        'Last Price': [lastPX],  # Scalar wrapped in list
+                        'ConID': [conid]  # Scalar wrapped in list
+                    })
 
+                    last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
-last_risk.to_csv("Q_Pareto_Transaction_History_PROD/Data/open_risks.csv")
-corr.to_csv("Q_Pareto_Transaction_History_PROD/Data/corr_matrix.csv")
+last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
+corr.to_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv")
 
 # Disconnect from IBKR
 ib.disconnect()

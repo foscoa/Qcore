@@ -7,10 +7,13 @@ import numpy as np
     """
 
 file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04222025.csv"
+file_path_AMC1 = "Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/U15721173_TradeHistory_AMC_20230512_20240510.csv"
+file_path_AMC2 = "Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/U15721173_TradeHistory_AMC_20240513.csv"
 
 # Read the CSV file
-df = pd.read_csv(file_path)
+df = pd.read_csv(file_path_AMC2)
 df.columns = df.columns.str.replace("/", "_", regex=False)
+
 
 # Filter for execution-level trades that are either "Open" or "Close"
 trade_df = df.query('LevelOfDetail == "EXECUTION" & Open_CloseIndicator in ["C", "O"]').copy()
@@ -169,4 +172,6 @@ def format_duration(duration):
 
 
 aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuration'].apply(format_duration)
-aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv")
+aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC_20240513.csv")
+# return  aggregated_positions_df
+
