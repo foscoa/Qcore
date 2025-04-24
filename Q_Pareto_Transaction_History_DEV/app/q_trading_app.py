@@ -14,9 +14,10 @@ import isodate
 from ib_insync import *
 from pandas.core.groupby.base import transform_kernel_allowlist
 
+from IBKR_open_risks import report_time
 
 # Define the file path
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04222025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04232025.csv"
 
 
 asst_path = os.path.dirname(os.path.abspath(__name__)) + '/Q_Pareto_Transaction_History_DEV/assets/'
@@ -31,14 +32,9 @@ def get_sample_data():
     return pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv", index_col=0)
 
 sample_data = get_sample_data()
-# summary table:
-def get_summary_table():
-    df = get_sample_data()
+report_time = sample_data['Report Time'].unique()[0]
+sample_data.drop('Report Time', axis=1, inplace=True)
 
-    summary_df = pd.DataFrame(columns=[
-        'Name',
-        ''
-    ])
 
 def get_number_postions(df):
     nr_positions = df["Status"].value_counts().to_dict()
@@ -51,7 +47,6 @@ def get_number_postions(df):
 
 def get_corr_matrix():
     return pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv", index_col=0)
-
 
 def get_journal_data(file_path):
 
@@ -68,6 +63,10 @@ def get_journal_data(file_path):
     # load AMC data
     aggregated_positions_df_AMC = pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC.csv",
                                           index_col=0)
+
+    # remove DAX money market trades
+    mm_AMC = ['DAX 15DEC23', 'DAX 15MAR24', 'DAX 20DEC24']
+    aggregated_positions_df_AMC =aggregated_positions_df_AMC.query('Description not in @mm_AMC')
 
     # merge with AMC data
     aggregated_positions_df = pd.concat([aggregated_positions_df, aggregated_positions_df_AMC], axis=0, ignore_index=True)
@@ -258,8 +257,7 @@ def butterfly_PnL_plot(trans_hist):
 
     ###
 
-
-def get_statistics():
+def get_statistics_old():
 
     # transaction history
     trans_hist = get_journal_data(file_path)
@@ -300,6 +298,68 @@ def get_statistics():
             "Avg Trade Duration": avg_duration_days_str,
             "Avg Trade Duration (Profits)": avg_duration_days_str_P,
             "Avg Trade Duration (Losses)": avg_duration_days_str_L}
+
+def get_statistics():
+    # transaction history
+    trans_hist = get_journal_data(file_path)
+
+    # Ensure date column is datetime
+    trans_hist['Date'] = pd.to_datetime(trans_hist['First Entry Date'])  # Adjust column name if needed
+
+    def get_stats(df):
+        if df.empty:
+            return {
+                "Number of Trades": "0",
+                "Win Rate": "0.00%",
+                "Avg Profit (EUR)": "0",
+                "Avg Loss (EUR)": "0",
+                "Ratio win/loss size": "N/A",
+                "% Profits Top 15%": "0.00%",
+                "Pareto Ratio": "0.00",
+                "Avg Trade Duration": "0d0h",
+                "Avg Trade Duration (Profits)": "0d0h",
+                "Avg Trade Duration (Losses)": "0d0h"
+            }
+
+        win_rate = (df['Real.PnL(EUR)'] > 0).sum() / (df['Real.PnL(EUR)'] != 0).sum()
+        avg_profit = df[df['Real.PnL(EUR)'] > 0]['Real.PnL(EUR)'].mean()
+        avg_loss = df[df['Real.PnL(EUR)'] <= 0]['Real.PnL(EUR)'].mean()
+
+        avg_duration_days = df['Seconds'].mean() / (60 * 60 * 24)
+        avg_duration_days_str = f"{floor(avg_duration_days)}d{int((avg_duration_days - floor(avg_duration_days)) * 24)}h"
+
+        avg_duration_days_P = df[df['Real.PnL(EUR)'] > 0]['Seconds'].mean() / (60 * 60 * 24)
+        avg_duration_days_str_P = f"{floor(avg_duration_days_P)}d{int((avg_duration_days_P - floor(avg_duration_days_P)) * 24)}h"
+
+        avg_duration_days_L = df[df['Real.PnL(EUR)'] <= 0]['Seconds'].mean() / (60 * 60 * 24)
+        avg_duration_days_str_L = f"{floor(avg_duration_days_L)}d{int((avg_duration_days_L - floor(avg_duration_days_L)) * 24)}h"
+
+        n_top = int(len(df['Real.PnL(EUR)']) * 0.15)
+        top_15_percent = df['Real.PnL(EUR)'].nlargest(n_top).sum() / df[df['Real.PnL(EUR)'] > 0]['Real.PnL(EUR)'].sum()
+
+        return {
+            "Number of Trades": str((df['Real.PnL(EUR)'] != 0).count()),
+            "Win Rate": f"{round(win_rate * 100, 2)}%",
+            "Avg Profit (EUR)": f"{int(avg_profit):,}".replace(",", "'") if not pd.isna(avg_profit) else "0",
+            "Avg Loss (EUR)": f"{int(avg_loss):,}".replace(",", "'") if not pd.isna(avg_loss) else "0",
+            "Ratio win/loss size": str(round(avg_profit / abs(avg_loss), 2)) if avg_loss != 0 else "N/A",
+            "% Profits Top 15%": f"{round(top_15_percent * 100, 2)}%",
+            "Pareto Ratio": str(round(top_15_percent / 0.85, 2)) if top_15_percent != 0 else "0",
+            "Avg Trade Duration": avg_duration_days_str,
+            "Avg Trade Duration (Profits)": avg_duration_days_str_P,
+            "Avg Trade Duration (Losses)": avg_duration_days_str_L
+        }
+
+    # Get stats for each period
+    stats = {
+        "2023": get_stats(trans_hist[trans_hist['Date'].dt.year == 2023]),
+        "2024": get_stats(trans_hist[trans_hist['Date'].dt.year == 2024]),
+        "2025": get_stats(trans_hist[trans_hist['Date'].dt.year == 2025]),
+        "SI": get_stats(trans_hist),
+    }
+
+    return stats
+
 
 # Layout
 app.layout = html.Div([
@@ -396,6 +456,14 @@ def render_content(tab):
 
         return html.Div([
 
+            # Report time outside the table, at the top
+            html.P(f"Report generated on: {report_time}", style={
+                "fontSize": "12px",
+                "fontStyle": "italic",
+                "color": "#7f8c8d",
+                "marginBottom": "8px"
+            }),
+
             html.Div([
                 html.H3("Fund Exposure", style={
                     "marginBottom": "10px",
@@ -445,7 +513,6 @@ def render_content(tab):
                 "marginBottom": "20px"
             }),
 
-            html.Br(),
             html.H3("Position Details",
                     style={
                             "marginBottom": "10px",
@@ -491,6 +558,11 @@ def render_content(tab):
                     'if': {'filter_query': '{Position} = "SHORT"', 'column_id': 'Position'},
                     'color': 'firebrick',
                 },
+                {
+                    "if": {"column_id": "Risk (bps)"},
+                    "fontWeight": "bold"
+                },
+
                 # ASSET CLASS CONDITIONAL FORMATTING
                 {
                     'if': {'filter_query': '{Asset Class} = "Rates"', 'column_id': 'Asset Class'},
@@ -612,8 +684,9 @@ def render_content(tab):
             )
         ])
     elif tab == 'stats':
-        stats = get_statistics()
-        df_stats = pd.DataFrame(list(stats.items()), columns=["Metric", "2025"])
+        stats = pd.DataFrame(get_statistics())
+        df_stats = stats.reset_index().rename(columns={"index": "Metric"})
+
         return html.Div([
             dash_table.DataTable(
                 data=df_stats.to_dict('records'),
@@ -621,7 +694,7 @@ def render_content(tab):
                 style_table={
                     'overflowX': 'auto',
                     'overflowY': 'auto',
-                    'width': '450px',  # Fixed width
+                    'width': '600px',  # Fixed width
                     'border': "1px solid #ddd"
                 },
                 style_header={'backgroundColor': "rgb(18,54,90)", 'color': 'white', 'fontWeight': 'bold'},
@@ -639,4 +712,5 @@ def render_content(tab):
 
 # Run server
 if __name__ == '__main__':
-    app.run(debug=False, port=8051)
+    # app.run(debug=False, port=8050)
+    app.run(host='0.0.0.0', port=8050, debug=False)

@@ -1,6 +1,8 @@
 from ib_insync import *
 import pandas as pd
 import numpy as np
+from datetime import datetime
+import pytz
 
 from IBKR_open_orders import open_positions
 
@@ -10,7 +12,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04222025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04242025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -314,7 +316,7 @@ def addBaseCCYfx(df, ccy):
 
 risk_df = addBaseCCYfx(risk_df, 'EUR')
 
-# contracts for Money market purposed
+# contracts for Money market purposes
 contracts_MM = [11625311, 74991935, 281534370, 301467983, 568953593]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
@@ -325,7 +327,8 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 nans_lastPX_Ids = {
                     488641260: portfolio_df.query("ConID == 488641260")['Market Price'].values[0], # MDAX cert,
                     230949979 : portfolio_df.query("ConID == 230949979")['Market Price'].values[0], # USD CNH
-                    120551943: portfolio_df.query("ConID == 120551943")['Market Price'].values[0]
+                    120551943: 52.40, # NEM
+                    118239195: 70.45
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -333,6 +336,8 @@ contracts_quoted_USd = {526262864: 100,
                         565301283: 100,
                         577421489: 100,
                         532513438: 100,
+                        573366572: 100,
+
                         #656391483: 100
 }
 
@@ -372,6 +377,12 @@ ts = result_query[0]
 ATR_30 = result_query[1]
 ts_ret = ts.copy().pct_change().dropna()
 corr = ts_ret.corr()
+
+# log report time
+# Set timezone to Zurich
+zurich_tz = pytz.timezone('Europe/Zurich')
+# Get current time in Zurich
+report_time = datetime.now(zurich_tz)
 
 
 risk_df.replace('', np.nan, inplace=True)
@@ -597,6 +608,53 @@ for conid in risk_df['ConID'].unique():
                     })
 
                     last_risk = pd.concat([last_risk, new_row], ignore_index=True)
+
+        elif position_status == "closed":
+            exposure = 0
+            open_position = 0
+            rlzd_PnL = sum(
+                    fill.commissionReport.realizedPNL
+                    for fills_list in sub_df['Fills']
+                    for fill in fills_list
+            )
+            if conid in df_open_rzld_pnl.index:
+                rlzd_PnL += df_open_rzld_pnl[conid]
+            unrlzd_PnL = 0
+            position = 'CLOSED'
+            risk = 0
+            string_stops = np.nan
+
+            new_row = pd.DataFrame(data={
+                'Status': [position_status],
+                'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
+                'FX': [fx],  # Scalar wrapped in list
+                'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
+                'Local Symbol': [sub_df['Local Symbol'].unique()[0]],  # Make sure it's a list
+                'Name': [sub_df.Name.unique()[0]],
+                'Asset Class': [sub_df['Asset Class'].unique()[0]],
+                'Position': [position],
+                'Contracts': [open_position],  # Scalar wrapped in list
+                'Risk (EUR)': [risk],  # Scalar wrapped in list
+                'Risk (bps)': [(risk / NLV) * 10000],
+                'Rlzd PnL (EUR)': [rlzd_PnL],
+                'Rlzd PnL (bps)': [(rlzd_PnL / NLV) * 10000],
+                'UnRlzdPnL(EUR)': [unrlzd_PnL],
+                'UnRlzdPnL(bps)': [(unrlzd_PnL / NLV) * 10000],
+                'Tot PnL (EUR)': [rlzd_PnL + unrlzd_PnL],
+                'Tot PnL (bps)': [((rlzd_PnL + unrlzd_PnL) / NLV) * 10000],
+                'Exposure (EUR)': [exposure],  # Scalar wrapped in list
+                'Expos. (%)': [exposure / NLV * 100],
+                'Stop or Trigger': [string_stops],
+                'ATR 30D': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan)],
+                'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
+                'multiplier': [multiplier],  # Scalar wrapped in list
+                'Last Price': [lastPX],  # Scalar wrapped in list
+                'ConID': [conid]  # Scalar wrapped in list
+            })
+
+            last_risk = pd.concat([last_risk, new_row], ignore_index=True)
+
+last_risk['Report Time'] = report_time.strftime("%A, %d %B %Y - %H:%M:%S %Z")
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
 corr.to_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv")

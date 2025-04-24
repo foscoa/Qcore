@@ -18,6 +18,7 @@ SGXNK,SGX Nikkei 225,Eqty Idx
 ZL,Soybean Oil,Comdty
 RS,Canola,Comdty
 ZC,Corn,Comdty
+ZCZ4,Corn,Comdty
 MNQ,Nasdaq 100,Eqty Idx
 DBA,Invesco DB Agric.,Comdty
 ALV,Allianz,Equity
@@ -29,6 +30,7 @@ LXS,Lanxess AG,Equity
 ZW,Chicago SRW Wheat,Comdty
 R,Long Gilt,Rates
 ZS,Soybean,Comdty
+ZSN4,Soybean,Comdty
 ZN,10Y T-Note,Rates
 EMA,Corn / Mais,Comdty
 SX7E,Euro STOXX Banks,Eqty Idx
@@ -55,5 +57,280 @@ FLKTB,10-Y Korea Treasury Bond,Rates
 MBT,Micro Bitcoin,Crypto
 NZD,New Zealand dollar,Forex
 GBS,Euro Schatz (2Y Bond),Rates
-RTYH4,Russel 2000,Eqty Idx
+RTY,Russel 2000,Eqty Idx
 8002.T,Marubeni Corp,Equity
+KO,Coca Cola,Equity
+NUH24,Nikkei 225 Index,Eqty Idx
+LE,Live Cattle,Comdty
+URA,Global X Uranium ETF,Comdty
+TAN,Invesco solar ETF,Eqty Idx
+SQ,Block Inc.,Equity
+6JZ4,JPY/USD,Forex
+6JM4,JPY/USD,Forex
+EUR.NOK,EUR.NOK,Forex
+RCN4,Robusta Coffee,Comdty
+168120019,E-mini Nikkei 225,Eqty Idx
+169030005,TOPIX (JPY),Eqty Idx
+169030018,Nikkei 225,Eqty Idx
+169060005,TOPIX (JPY),Eqty Idx
+169090005,TOPIX (JPY),Eqty Idx
+6AH4,Australian dollar,Forex
+6AZ3,Australian dollar,Forex
+6AZ4,Australian dollar,Forex
+6BH4,British pound,Forex
+6BM4,British pound,Forex
+6BU3,British pound,Forex
+6BU4,British pound,Forex
+6CM3,Canadian dollar,Forex
+6CM4,Canadian dollar,Forex
+6CU3,Canadian dollar,Forex
+6CU4,Canadian dollar,Forex
+6CZ3,Canadian dollar,Forex
+6CZ4,Canadian dollar,Forex
+6JH4,JPY/USD,Forex
+6JM4,JPY/USD,Forex
+6JU3,JPY/USD,Forex
+6JU4,JPY/USD,Forex
+6LV3,Brazilian real,Forex
+6MH4,Mexican peso,Forex
+6MZ3,Mexican peso,Forex
+6MZ4,Mexican peso,Forex
+6SU4,Swiss franc,Forex
+6SZ4,Swiss franc,Forex
+AAPLn,Apple Inc,Equity
+ACAp,Credit Agricole,Equity
+ADMn,Archer-Daniels-Midland co,Equity
+ADPn,Automatic Data Processing,Equity
+AFLn,AFLAC Inc,Equity
+AMTn,American Tower Corp,Equity
+AMZNn,Amazon Inc,Equity
+ARKK,ARK Innovation ETF,Eqty Idx
+AVGOn,Broadcom Inc,Equity
+BAYNd,Bayer AG,Equity
+BMWd,BMW,Equity
+BRK B,Berkshire Hathaway,Equity
+BTCM3,CME CF Bitcoin,Crypto
+CCL,Carnival Corp,Equity
+CCU3,Cocoa NYBOT,Comdty
+CCZ4,Cocoa NYBOT,Comdty
+CH4,Cocoa ICE,Comdty
+CLH4,Light Sweet Crude Oil,Comdty
+CLJ4,Light Sweet Crude Oil,Comdty
+CLK4,Light Sweet Crude Oil,Comdty
+CLN4,Light Sweet Crude Oil,Comdty
+CLU3,Light Sweet Crude Oil,Comdty
+CLV4,Light Sweet Crude Oil,Comdty
+CLXn,Clorox,Equity
+CLZ3,Light Sweet Crude Oil,Comdty
+COPX,Global X Copper Miners ETF,Comdty
+COSTn,Costco Wholesale Corp,Equity
+CPNG,Coupang,Equity
+CTH4,Cotton No.2,Comdty
+CTK4,Cotton No.2,Comdty
+CTZ3,Cotton No.2,Comdty
+CTZ4,Cotton No.2,Comdty
+CVNAn,Carvana Co,Equity
+DHLd,Deutsche Post AG,Equity
+DISn,Disney,Equity
+DOWn,Dow Inc,Equity
+DTEd,Deutsche Telekom,Equity
+DXU3,US Dollar Index,Forex
+DXZ3,US Dollar Index,Forex
+E7U4,European Monetary Union Euro,Forex
+E7Z3,European Monetary Union Euro,Forex
+EBMH5,Milling Wheat Futures,Comdty
+ECFZ3,ICE ECX EUA,Comdty
+ECFZ4,ICE ECX EUA,Comdty
+EUR.NOK,EUR.NOK,Forex
+EUR.NZD,EUR.NZD,Forex
+EUR.SEK,EUR.SEK,Forex
+EUR.SGD,EUR.SGD,Forex
+FBT,First Trust Arca Biotech ETF,Eqty Idx
+FDAX DEC 24,DAX,Eqty Idx
+FDAX DEC 23,DAX,Eqty Idx
+FDAX JUN 23,DAX,Eqty Idx
+FDAX JUN 24,DAX,Eqty Idx
+FDAX MAR 24,DAX,Eqty Idx
+FDAX SEP 23,DAX,Eqty Idx
+FDAX SEP 24,DAX,Eqty Idx
+FDXM DEC 23,DAX,Eqty Idx
+FDXM SEP 24,DAX,Eqty Idx
+FDXS 20230915 M,DAX,Eqty Idx
+FESX DEC 23,EuroStoxx 50,Eqty Idx
+FESX JUN 23,EuroStoxx 50,Eqty Idx
+FESX JUN 24,EuroStoxx 50,Eqty Idx
+FESX MAR 24,EuroStoxx 50,Eqty Idx
+FESX SEP 23,EuroStoxx 50,Eqty Idx
+FESX SEP 24,EuroStoxx 50,Eqty Idx
+FGBL 20231207 M,Euro Bund 10Y,Rates
+FGBL 20240606 M,Euro Bund 10Y,Rates
+FGBL 20240906 M,Euro Bund 10Y,Rates
+FGBL 20241206 M,Euro Bund 10Y,Rates
+FGBS 20241206 M,Euro Schatz 2Y,Rates
+FSMI JUN 24,SMI,Eqty Idx
+FSMI MAR 24,SMI,Eqty Idx
+FSMX 20240621 M,MDAX,Eqty Idx
+FSTC 20230915 M,Stoxx 600 Chemicals,Eqty Idx
+FSXE 20230915 M,EuroStoxx 50,Eqty Idx
+FSXE 20240315 M,EuroStoxx 50,Eqty Idx
+GCG4,Gold,Comdty
+GCJ4,Gold,Comdty
+GCM4,Gold,Comdty
+GCQ4,Gold,Comdty
+GFF4,Feeder Cattle,Comdty
+GFV3,Feeder Cattle,Comdty
+GFV4,Feeder Cattle,Comdty
+HEJ4,Lean Hogs,Comdty
+HGH4,Copper,Comdty
+HGK4,Copper,Comdty
+HGU3,Copper,Comdty
+HGZ4,Copper,Comdty
+HOQ3,Heating Oil,Comdty
+IZ3,3M EURIBOR Interest Rate,Rates
+IBBn,IShares Biotech ETF,Eqty Idx
+IYT,IShares US Transportation ETF,Eqty Idx
+JNJn,Johnson and Johnson,Equity
+KCK4,Coffee C,Comdty
+KCN4,Coffee C,Comdty
+KCZ4,Coffee C,Comdty
+KE   DEC 23,Hard Red Winter Wheat,Comdty
+KEN4,Hard Red Winter Wheat,Comdty
+KRE, SPDR S&P Regional Banking,Eqty Idx
+LEJ4,Live Cattle,Comdty
+LEM4,Live Cattle,Comdty
+LEQ3,Live Cattle,Comdty
+LEQ4,Live Cattle,Comdty
+LEZ3,Live Cattle,Comdty
+M2KU3,Micro E-mini Russel 2000,Eqty Idx
+M2KU4,Micro E-mini Russel 2000,Eqty Idx
+M2KZ3,Micro E-mini Russel 2000,Eqty Idx
+M6JM3,E-micro USD/JPY,Forex
+MBTM3,Micro Bitcoin CME,Crypto
+MCLV3,Micro WTI Crude Oil,Comdty
+MESM3,Micro E-mini S&P500,Eqty Idx
+MESM4,Micro E-mini S&P500,Eqty Idx
+MESU3,Micro E-mini S&P500,Eqty Idx
+MESZ3,Micro E-mini S&P500,Eqty Idx
+MESZ4,Micro E-mini S&P500,Eqty Idx
+METAn,Meta,Equity
+MGCQ3,Micro Gold,Comdty
+MGCZ4,Micro Gold,Comdty
+MMEU4,MSCI Emergin Markets,Eqty Idx
+MNQM3,Micro E-mini NASDAQ 100,Eqty Idx
+MNQM4,Micro E-mini NASDAQ 100,Eqty Idx
+MNQU4,Micro E-mini NASDAQ 100,Eqty Idx
+MNQZ3,Micro E-mini NASDAQ 100,Eqty Idx
+MNQZ4,Micro E-mini NASDAQ 100,Eqty Idx
+MSFTn,Microsoft,Equity
+MYMZ4,Micro E-mini Dow Jones,Eqty Idx
+NGN3,Natural Gas,Comdty
+NGU3,Natural Gas,Comdty
+NGV4,Natural Gas,Comdty
+NGX4,Natural Gas,Comdty
+NGZ3,Natural Gas,Comdty
+NKU23,Nikkei 225,Eqty Idx
+NKZ24,Nikkei 225,Eqty Idx
+NQH4,E-mini NASDAQ 100,Eqty Idx
+NQM4,E-mini NASDAQ 100,Eqty Idx
+NQZ3,E-mini NASDAQ 100,Eqty Idx
+NVDAn,NVDIA Corp,Equity
+NZD.CHF,NZD.CHF,Forex
+OHIn,Omega Healthcare Investors Inc,Equity
+OJX4,Orange Juice,Comdty
+PLF4,Platinum,Comdty
+PLJ4,Platinum,Comdty
+PLV3,Platinum,Comdty
+PLV4,Platinum,Comdty
+PSNl,Personalis Inc,Equity
+RBH4,RBOB Gasoline,Comdty
+RBK4,RBOB Gasoline,Comdty
+RBN4,RBOB Gasoline,Comdty
+RBU3,RBOB Gasoline,Comdty
+RBX3,RBOB Gasoline,Comdty
+RCF4,Robusta Coffee,Comdty
+RCH4,Robusta Coffee,Comdty
+RCK4,Robusta Coffee,Comdty
+RCN4,Robusta Coffee,Comdty
+RCU3,Robusta Coffee,Comdty
+RCU4,Robusta Coffee,Comdty
+RCX3,Robusta Coffee,Comdty
+RCX4,Robusta Coffee,Comdty
+RFH4,EUR.CHF,Forex
+RFM4,EUR.CHF,Forex
+RPM4,EUR.CHF,Forex
+RPZ3,EUR.GBP,Forex
+RSK4,Canola,Comdty
+RTYH4,E-mini Russell 2000,Eqty Idx
+RTYM3,E-mini Russell 2000,Eqty Idx
+RTYU3,E-mini Russell 2000,Eqty Idx
+RTYU4,E-mini Russell 2000,Eqty Idx
+RTYZ4,E-mini Russell 2000,Eqty Idx
+RYZ3,EUR.JPY,Forex
+SAPd,SAP,Equity
+SBH4,Sugar No.11,Comdty
+SBK4,Sugar No.11,Comdty
+SBV4,Sugar No.11,Comdty
+SEKM3,Swedish krona,Forex
+SIEd,Siemens AG,Equity
+SIN3,Silver,Comdty
+SIRU3,Indian Rupee,Forex
+SIZ3,Silver,Comdty
+SLV,IShares Silver Trust,Comdty
+SQn,Block Inc,Equity
+TLTn,IShares 20Y+ Treasury,Rates
+TSLAn,Tesla Inc,Equity
+TWLOn,Twilio Inc,Equity
+UCU24,SGX USD Chinese Renminbi (CNH),Forex
+UGA,UNITED STATES GAS FUND,Comdty
+USD.CAD,USD.CAD,Forex
+VNQ,Vanguard Real Estate ETF,Equity
+VOW3d,Volkswagen,Equity
+WH4,White Sugar,Comdty
+WQ3,White Sugar,Comdty
+WV3,White Sugar,Comdty
+WZ3,White Sugar,Comdty
+XLE,Energy Select Sector ETF,Eqty Idx
+XOMn,Exxon Mobil,Equity
+YM   DEC 23,E-mini Dow Jones,Eqty Idx
+YM   MAR 23,E-mini Dow Jones,Eqty Idx
+YM   SEP 23,E-mini Dow Jones,Eqty Idx
+YM   DEC 24,E-mini Dow Jones,Eqty Idx
+YM   MAR 24,E-mini Dow Jones,Eqty Idx
+YM   SEP 24,E-mini Dow Jones,Eqty Idx
+YMU4,E-mini Dow Jones,Eqty Idx
+ZB   JUN 23,US Treasury Bond,Rates
+ZB   JUN 24,US Treasury Bond,Rates
+ZC   DEC 23,Corn,Comdty
+ZC   DEC 24,Corn,Comdty
+ZCZ4,Corn,Comdty
+ZH4,FTSE 100,Eqty Idx
+ZL   DEC 23,Soybean Oil,Comdty
+ZL   DEC 24,Soybean Oil,Comdty
+ZLZ4,Soybean Oil,Comdty
+ZM   DEC 23,Soybean Meal,Comdty
+ZM   MAY 23,Soybean Meal,Comdty
+ZM   DEC 24,Soybean Meal,Comdty
+ZM   MAY 24,Soybean Meal,Comdty
+ZM4,FTSE 100,Eqty Idx
+ZMN4,Soybean Meal,Comdty
+ZMZ4,Soybean Meal,Comdty
+ZN   MAR 23,Soybean Meal,Comdty
+ZN   MAR 24,Soybean Meal,Comdty
+ZNM4,10Y US Treasury Note,Rates
+ZNU4,10Y US Treasury Note,Rates
+ZNZ4,10Y US Treasury Note,Rates
+ZS   JAN 23,Soybean,Comdty
+ZS   JUL 23,Soybean,Comdty
+ZS   MAY 23,Soybean,Comdty
+ZS   NOV 23,Soybean,Comdty
+ZS   JAN 24,Soybean,Comdty
+ZS   JUL 24,Soybean,Comdty
+ZS   MAY 24,Soybean,Comdty
+ZS   NOV 24,Soybean,Comdty
+ZSN4,Soybean,Comdty
+ZU3,FTSE 100,Eqty Idx
+ZWN4,Wheat,Comdty
+ZWU4,Wheat,Comdty
+ZWZ4,Wheat,Comdty
+
+

@@ -10,168 +10,184 @@ file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_042220
 file_path_AMC1 = "Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/U15721173_TradeHistory_AMC_20230512_20240510.csv"
 file_path_AMC2 = "Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/U15721173_TradeHistory_AMC_20240513.csv"
 
-# Read the CSV file
-df = pd.read_csv(file_path_AMC2)
-df.columns = df.columns.str.replace("/", "_", regex=False)
 
 
-# Filter for execution-level trades that are either "Open" or "Close"
-trade_df = df.query('LevelOfDetail == "EXECUTION" & Open_CloseIndicator in ["C", "O"]').copy()
+def aggregator(file_path):
 
-# Clean and convert DateTime column
-trade_df['DateTime_clean'] = (
-    pd.to_datetime(trade_df.DateTime.str.replace(";", " "), format="%Y%m%d %H%M%S", errors='coerce')
-    .dt.tz_localize('America/New_York')
-    .dt.tz_convert('Europe/Berlin')
-    .dt.tz_localize(None)
-)
+    # Read the CSV file
+    df = pd.read_csv(file_path)
+    df.columns = df.columns.str.replace("/", "_", regex=False)
 
-# Sort by DateTime in descending order
-trade_df = trade_df.sort_values(by='DateTime_clean', ascending=False)
+    # Filter for execution-level trades that are either "Open" or "Close"
+    trade_df = df.query('LevelOfDetail == "EXECUTION" & Open_CloseIndicator in ["C", "O"]').copy()
 
-# Calculate Realized PnL and Notional value in Base Currency
-trade_df['FifoPnlRealizedToBase'] = trade_df['FifoPnlRealized'] * trade_df['FXRateToBase']
-trade_df['NotionalToBase'] = trade_df['Quantity'] * trade_df['Multiplier'] * trade_df['FXRateToBase'] * \
-                             trade_df['TradePrice']
+    # Clean and convert DateTime column
+    trade_df['DateTime_clean'] = (
+        pd.to_datetime(trade_df.DateTime.str.replace(";", " "), format="%Y%m%d %H%M%S", errors='coerce')
+        .dt.tz_localize('America/New_York')
+        .dt.tz_convert('Europe/Berlin')
+        .dt.tz_localize(None)
+    )
 
-# Map buy/sell directions to position types
-trade_df['Position'] = trade_df['Buy_Sell'].map({'SELL': 'SHORT', 'BUY': 'LONG'})
+    # Sort by DateTime in descending order
+    trade_df = trade_df.sort_values(by='DateTime_clean', ascending=False)
 
-# Load symbol mapping file
-symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symbol_mapping.csv', index_col=0)
+    # Calculate Realized PnL and Notional value in Base Currency
+    trade_df['FifoPnlRealizedToBase'] = trade_df['FifoPnlRealized'] * trade_df['FXRateToBase']
+    trade_df['NotionalToBase'] = trade_df['Quantity'] * trade_df['Multiplier'] * trade_df['FXRateToBase'] * \
+                                 trade_df['TradePrice']
 
-# Map underlying symbols to asset classes and names
-trade_df['Name'] = trade_df['UnderlyingSymbol'].map(symbol_mapping['name'].to_dict())
-trade_df['Instr.'] = trade_df['AssetClass']
-trade_df['AssetClass'] = trade_df['UnderlyingSymbol'].map(symbol_mapping['assetClass'].to_dict())
+    # Map buy/sell directions to position types
+    trade_df['Position'] = trade_df['Buy_Sell'].map({'SELL': 'SHORT', 'BUY': 'LONG'})
 
-# Define aggregation rules
-agg_dict_IBOrderID = {
-    # Categorical fields: keep first non-null occurrence
-    'ClientAccountID': 'first',
-    'CurrencyPrimary': 'first',
-    'Symbol': 'first',
-    'Description': 'first',
-    'Conid': 'first',
-    'Multiplier': 'first',
-    'TradeDate': 'first',
-    'Position': 'first',
-    'AssetClass': 'first',
-    'Instr.': 'first',
-    'Name': 'first',
-    'Open_CloseIndicator': 'first',
-    'Exchange': 'first',
+    # Load symbol mapping file
+    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symbol_mapping.csv', index_col=0)
 
-    # Numerical fields: apply appropriate aggregations
-    'Quantity': 'sum',
-    'TradePrice': 'mean',
-    'IBCommission': 'sum',
-    'NotionalToBase': 'sum',
-    'FifoPnlRealizedToBase': 'sum',
-    'DateTime_clean': 'first',
-    'FXRateToBase': 'mean',  # Weighted average trade price,  # Averaging the FX rate makes sense
-}
+    # Map underlying symbols to asset classes and names
+    trade_df['Instr.'] = trade_df['AssetClass']
 
-# Aggregate trades by IBOrderID
-aggregated_df = trade_df.groupby('IBOrderID').agg(agg_dict_IBOrderID).reset_index()
-aggregated_df = aggregated_df.sort_values(by='DateTime_clean', ascending=False)
+    # Combine col1 and col2, prioritizing col1 if not null
+    trade_df['lookup_key'] = trade_df['Symbol'].combine_first(trade_df['UnderlyingSymbol'])
 
+    trade_df['Name'] = trade_df['lookup_key'].map(symbol_mapping['name'].to_dict())
+    trade_df['AssetClass'] = trade_df['lookup_key'].map(symbol_mapping['assetClass'].to_dict())
 
-def aggregate_closed_positions(df):
-    """
-    Aggregates closed positions by identifying fully offsetting trades.
-    """
+    # Define aggregation rules
+    agg_dict_IBOrderID = {
+        # Categorical fields: keep first non-null occurrence
+        'ClientAccountID': 'first',
+        'CurrencyPrimary': 'first',
+        'Symbol': 'first',
+        'Description': 'first',
+        'Conid': 'first',
+        'Multiplier': 'first',
+        'TradeDate': 'first',
+        'Position': 'first',
+        'AssetClass': 'first',
+        'Instr.': 'first',
+        'Name': 'first',
+        'Open_CloseIndicator': 'first',
+        'Exchange': 'first',
 
-    aggregated_positions = pd.DataFrame()
+        # Numerical fields: apply appropriate aggregations
+        'Quantity': 'sum',
+        'TradePrice': 'mean',
+        'IBCommission': 'sum',
+        'NotionalToBase': 'sum',
+        'FifoPnlRealizedToBase': 'sum',
+        'DateTime_clean': 'first',
+        'FXRateToBase': 'mean',  # Weighted average trade price,  # Averaging the FX rate makes sense
+    }
 
-    # Group by contract ID (Conid)
-    for conid, group in df.groupby('Conid'):
-        group = group.sort_values(by='DateTime_clean', ascending=True)
-
-        # Track cumulative quantity to detect closed positions
-        group['CumulativeQuantity'] = group['Quantity'].cumsum()
-
-        # Identify indices where cumulative quantity returns to zero
-        zero_indices = np.where(group['CumulativeQuantity'] == 0)[0] + 1
-        zero_indices = np.insert(zero_indices, 0, 0)
-
-        for i in range(len(zero_indices) - 1):
-            trade_slice = group.iloc[zero_indices[i]:zero_indices[i + 1]].copy()
-
-            if trade_slice.empty:
-                continue  # Skip if no trades in this slice
-
-            closed_trades = trade_slice[trade_slice['Open_CloseIndicator'] == "C"]
-            open_trades = trade_slice[trade_slice['Open_CloseIndicator'] == "O"]
-
-            # Aggregate metrics
-            slice_agg = trade_slice.groupby('Conid').agg({
-                'DateTime_clean': 'last',
-                'Symbol': 'first',
-                'Description': 'first',
-                'Name': 'first',
-                'Open_CloseIndicator': 'first',
-                'IBOrderID': lambda x: ', '.join(x.astype(str).unique()),
-                'Exchange': 'first',
-                'AssetClass': 'first',
-                'CurrencyPrimary': 'first',
-                'FXRateToBase': 'last',
-                'Position': 'first',
-                'Quantity': lambda x: x.cumsum().abs().max(),
-                'NotionalToBase': lambda x: x.cumsum().abs().max(),
-                'FifoPnlRealizedToBase': 'sum',
-                'Multiplier': 'first',
-                'Instr.': 'first',
-            }).reset_index()
-
-            # Add derived metrics
-            slice_agg['FirstEntryDate'] = trade_slice['DateTime_clean'].iloc[0]
-            slice_agg['AvgClosePrice'] = (
-                    (closed_trades['TradePrice'] * closed_trades['Quantity'].abs()).sum() /
-                    closed_trades['Quantity'].abs().sum()
-            ) if closed_trades['Quantity'].abs().sum() > 0 else np.nan
-
-            slice_agg['AvgOpenPrice'] = (
-                    (open_trades['TradePrice'] * open_trades['Quantity'].abs()).sum() /
-                    open_trades['Quantity'].abs().sum()
-            ) if open_trades['Quantity'].abs().sum() > 0 else np.nan
-
-            aggregated_positions = pd.concat([aggregated_positions, slice_agg], ignore_index=True)
-
-    aggregated_positions.rename(columns={'DateTime_clean': 'LastExitDate'}, inplace=True)
-
-    return aggregated_positions
+    # Aggregate trades by IBOrderID
+    aggregated_df = trade_df.groupby('IBOrderID').agg(agg_dict_IBOrderID).reset_index()
+    aggregated_df = aggregated_df.sort_values(by='DateTime_clean', ascending=False)
 
 
-# Aggregate closed positions
-aggregated_positions_df = aggregate_closed_positions(aggregated_df)
-aggregated_positions_df = aggregated_positions_df.sort_values(by='LastExitDate', ascending=False)
+    def aggregate_closed_positions(df):
+        """
+        Aggregates closed positions by identifying fully offsetting trades.
+        """
 
-# Trim long text fields
-aggregated_positions_df['Symbol'] = aggregated_positions_df['Symbol'].astype(str).apply(
-    lambda x: x[:10] + '...' if len(x) > 10 else x)
-aggregated_positions_df['Description'] = aggregated_positions_df['Description'].astype(str).apply(
-    lambda x: x[:15] + '...' if len(x) > 15 else x)
+        aggregated_positions = pd.DataFrame()
 
-# Compute trade duration
-aggregated_positions_df['TradeDuration'] = aggregated_positions_df['LastExitDate'] - aggregated_positions_df[
-    'FirstEntryDate']
-aggregated_positions_df['Seconds'] = aggregated_positions_df['TradeDuration'].dt.total_seconds()
+        # Group by contract ID (Conid)
+        for conid, group in df.groupby('Conid'):
+            group = group.sort_values(by='DateTime_clean', ascending=True)
+
+            # Track cumulative quantity to detect closed positions
+            group['CumulativeQuantity'] = group['Quantity'].cumsum()
+
+            # Identify indices where cumulative quantity returns to zero
+            zero_indices = np.where(group['CumulativeQuantity'] == 0)[0] + 1
+            zero_indices = np.insert(zero_indices, 0, 0)
+
+            for i in range(len(zero_indices) - 1):
+                trade_slice = group.iloc[zero_indices[i]:zero_indices[i + 1]].copy()
+
+                if trade_slice.empty:
+                    continue  # Skip if no trades in this slice
+
+                closed_trades = trade_slice[trade_slice['Open_CloseIndicator'] == "C"]
+                open_trades = trade_slice[trade_slice['Open_CloseIndicator'] == "O"]
+
+                # Aggregate metrics
+                slice_agg = trade_slice.groupby('Conid').agg({
+                    'DateTime_clean': 'last',
+                    'Symbol': 'first',
+                    'Description': 'first',
+                    'Name': 'first',
+                    'Open_CloseIndicator': 'first',
+                    'IBOrderID': lambda x: ', '.join(x.astype(str).unique()),
+                    'Exchange': 'first',
+                    'AssetClass': 'first',
+                    'CurrencyPrimary': 'first',
+                    'FXRateToBase': 'last',
+                    'Position': 'first',
+                    'Quantity': lambda x: x.cumsum().abs().max(),
+                    'NotionalToBase': lambda x: x.cumsum().abs().max(),
+                    'FifoPnlRealizedToBase': 'sum',
+                    'Multiplier': 'first',
+                    'Instr.': 'first',
+                }).reset_index()
+
+                # Add derived metrics
+                slice_agg['FirstEntryDate'] = trade_slice['DateTime_clean'].iloc[0]
+                slice_agg['AvgClosePrice'] = (
+                        (closed_trades['TradePrice'] * closed_trades['Quantity'].abs()).sum() /
+                        closed_trades['Quantity'].abs().sum()
+                ) if closed_trades['Quantity'].abs().sum() > 0 else np.nan
+
+                slice_agg['AvgOpenPrice'] = (
+                        (open_trades['TradePrice'] * open_trades['Quantity'].abs()).sum() /
+                        open_trades['Quantity'].abs().sum()
+                ) if open_trades['Quantity'].abs().sum() > 0 else np.nan
+
+                aggregated_positions = pd.concat([aggregated_positions, slice_agg], ignore_index=True)
+
+        aggregated_positions.rename(columns={'DateTime_clean': 'LastExitDate'}, inplace=True)
+
+        return aggregated_positions
 
 
-def format_duration(duration):
-    """Format timedelta into a readable string."""
-    if pd.isnull(duration):
-        return "N/A"
+    # Aggregate closed positions
+    aggregated_positions_df = aggregate_closed_positions(aggregated_df)
+    aggregated_positions_df = aggregated_positions_df.sort_values(by='LastExitDate', ascending=False)
 
-    days = duration.days
-    hours, remainder = divmod(duration.seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
+    # Trim long text fields
+    aggregated_positions_df['Symbol'] = aggregated_positions_df['Symbol'].astype(str).apply(
+        lambda x: x[:10] + '...' if len(x) > 10 else x)
+    aggregated_positions_df['Description'] = aggregated_positions_df['Description'].astype(str).apply(
+        lambda x: x[:15] + '...' if len(x) > 15 else x)
 
-    return f"{days} days {hours:02}:{minutes:02}:{seconds:02}"
+    # Compute trade duration
+    aggregated_positions_df['TradeDuration'] = aggregated_positions_df['LastExitDate'] - aggregated_positions_df[
+        'FirstEntryDate']
+    aggregated_positions_df['Seconds'] = aggregated_positions_df['TradeDuration'].dt.total_seconds()
 
 
-aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuration'].apply(format_duration)
-aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC_20240513.csv")
-# return  aggregated_positions_df
+    def format_duration(duration):
+        """Format timedelta into a readable string."""
+        if pd.isnull(duration):
+            return "N/A"
 
+        days = duration.days
+        hours, remainder = divmod(duration.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+
+        return f"{days} days {hours:02}:{minutes:02}:{seconds:02}"
+
+
+    aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuration'].apply(format_duration)
+    # aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC_20240513.csv")
+    return  aggregated_positions_df
+
+df_AMC1 = aggregator(file_path_AMC1)
+df_AMC2 = aggregator(file_path_AMC2)
+
+# merge with AMC data
+df_AMC = pd.concat([df_AMC1, df_AMC2], axis=0, ignore_index=True)
+
+df_AMC.to_csv("Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC.csv")
+
+noni = df_AMC[df_AMC.Name.isna()]
