@@ -12,7 +12,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04242025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04252025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -444,12 +444,20 @@ for conid in risk_df['ConID'].unique():
 
     # hybrid orders
     hybrid_IDs = [727764322, # GBS
-                  304037456  # CL
-                ]
+                  # 304037456,  # CL
+                  # 532513438, #ZL
+                  ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
         open_sub_df = sub_df[(sub_df.Quantity.isna()) | (sub_df.Quantity == open_q)]
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
+
+        # open and working orders have the same quantity
+        if conid == 532513438:
+            permIDs = [585675972]
+            open_sub_df = sub_df.query('PermID not in @permIDs')
+            working_sub_df = sub_df.query('PermID in @permIDs')
+
         sub_df_iter = [open_sub_df, working_sub_df]
 
 
@@ -654,9 +662,11 @@ for conid in risk_df['ConID'].unique():
 
             last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
+last_risk['NLV'] = NLV
 last_risk['Report Time'] = report_time.strftime("%A, %d %B %Y - %H:%M:%S %Z")
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
+last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
 corr.to_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv")
 
 # Disconnect from IBKR

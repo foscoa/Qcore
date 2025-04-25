@@ -8,32 +8,31 @@ import numpy as np
 from dash.dash_table.Format import Format, Scheme, Sign, Group
 from scipy.stats import gaussian_kde
 from math import floor
-
 import plotly.graph_objects as go
-import isodate
-from ib_insync import *
-from pandas.core.groupby.base import transform_kernel_allowlist
-
-from IBKR_open_risks import report_time
 
 # Define the file path
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04232025.csv"
-
-
+file_path_transaction_history = "Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv"
+file_path_transaction_history_AMC = 'Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC.csv'
+file_path_open_risks = "Q_Pareto_Transaction_History_DEV/Data/open_risks.csv"
 asst_path = os.path.dirname(os.path.abspath(__name__)) + '/Q_Pareto_Transaction_History_DEV/assets/'
-# asst_path = "/Users/foscoantognini/Documents/QCore/Qcore/Q_Pareto_Transaction_History_DEV/assets/"
+file_path_corr_matrix= "Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv"
+file_path_manual_entries = 'Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history_manual_entries.xls'
+
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
-app.title = "Q - PT Trading Overview"
+app.title = "Q - PT Trading App"
 
 
 # Sample DataFrames
-def get_sample_data():
-    return pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv", index_col=0)
+def get_sample_data(file_path):
+    return pd.read_csv(file_path, index_col=0)
 
-sample_data = get_sample_data()
+sample_data = get_sample_data(file_path_open_risks)
+
 report_time = sample_data['Report Time'].unique()[0]
-sample_data.drop('Report Time', axis=1, inplace=True)
+NLV = sample_data['NLV'].unique()[0]
+
+sample_data.drop(['Report Time', 'NLV'], axis=1, inplace=True)
 
 
 def get_number_postions(df):
@@ -46,23 +45,22 @@ def get_number_postions(df):
     return nr_positions
 
 def get_corr_matrix():
-    return pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv", index_col=0)
+    return pd.read_csv(file_path_corr_matrix, index_col=0)
 
-def get_journal_data(file_path):
+def get_journal_data(file_path_transaction_history):
 
-    aggregated_positions_df = pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv",
+    aggregated_positions_df = pd.read_csv(file_path_transaction_history,
                                              index_col=0)
 
-    manual_entries = pd.read_excel(
-        'Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history_manual_entries.xls', engine='xlrd')
+    manual_entries = pd.read_excel(file_path_manual_entries
+        , engine='xlrd')
 
     # get rid of mone market trades
     order_IDs = list(manual_entries[manual_entries.Scope == 'money market'].IBOrderID)
     aggregated_positions_df = aggregated_positions_df.query('IBOrderID not in @order_IDs')
 
     # load AMC data
-    aggregated_positions_df_AMC = pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC.csv",
-                                          index_col=0)
+    aggregated_positions_df_AMC = pd.read_csv(file_path_transaction_history_AMC, index_col=0)
 
     # remove DAX money market trades
     mm_AMC = ['DAX 15DEC23', 'DAX 15MAR24', 'DAX 20DEC24']
@@ -257,51 +255,9 @@ def butterfly_PnL_plot(trans_hist):
 
     ###
 
-def get_statistics_old():
-
-    # transaction history
-    trans_hist = get_journal_data(file_path)
-
-
-    win_rate = (trans_hist['Real.PnL(EUR)'] > 0).sum()/(trans_hist['Real.PnL(EUR)'] > 0).count()
-
-    avg_profit = trans_hist[(trans_hist['Real.PnL(EUR)'] > 0)]['Real.PnL(EUR)'].mean()
-
-    avg_loss = trans_hist[(trans_hist['Real.PnL(EUR)'] <= 0)]['Real.PnL(EUR)'].mean()
-
-    # all trades
-    avg_duration_days = trans_hist.Seconds.mean()/(60*60*24)
-    avg_duration_days_str = str(floor(avg_duration_days)) + "d" + \
-                            str(int((avg_duration_days - floor(avg_duration_days))*24)) + "h"
-
-    # avg duration profits
-    avg_duration_days_P = trans_hist[(trans_hist['Real.PnL(EUR)'] > 0)].Seconds.mean() / (60 * 60 * 24)
-    avg_duration_days_str_P = str(floor(avg_duration_days_P)) + "d" + \
-                            str(int((avg_duration_days_P - floor(avg_duration_days_P)) * 24)) + "h"
-
-    # avg duration losses
-    avg_duration_days_L = trans_hist[(trans_hist['Real.PnL(EUR)'] <= 0)].Seconds.mean() / (60 * 60 * 24)
-    avg_duration_days_str_L = str(floor(avg_duration_days_L)) + "d" + \
-                            str(int((avg_duration_days_L - floor(avg_duration_days_L)) * 24)) + "h"
-
-    # % Profits Top 15%
-    n_top = int(len(trans_hist['Real.PnL(EUR)']) * 0.15)
-    top_15_percent = trans_hist['Real.PnL(EUR)'].nlargest(n_top).sum()/trans_hist['Real.PnL(EUR)'][(trans_hist['Real.PnL(EUR)'] > 0)].sum()
-
-    return {"Number of Trades": str((trans_hist['Real.PnL(EUR)'] != 0).count()),
-            "Win Rate": str(round(win_rate*100,2)) + "%",
-            "Avg Profit (EUR)": f"{int(avg_profit):,}".replace(",", "'"),
-            "Avg Loss (EUR)": f"{int(avg_loss):,}".replace(",", "'"),
-            "Ratio win/loss size": str(round(avg_profit/abs(avg_loss),2)),
-            "% Profits Top 15%": str(round(top_15_percent*100,2)) + "%",
-            "Pareto Ratio": str(round(top_15_percent/0.85,2)),
-            "Avg Trade Duration": avg_duration_days_str,
-            "Avg Trade Duration (Profits)": avg_duration_days_str_P,
-            "Avg Trade Duration (Losses)": avg_duration_days_str_L}
-
 def get_statistics():
     # transaction history
-    trans_hist = get_journal_data(file_path)
+    trans_hist = get_journal_data(file_path_transaction_history)
 
     # Ensure date column is datetime
     trans_hist['Date'] = pd.to_datetime(trans_hist['First Entry Date'])  # Adjust column name if needed
@@ -597,7 +553,7 @@ def render_content(tab):
             #dcc.Graph(figure=fig)  # Render heatmap
         ])
     elif tab == 'journal':
-        df = get_journal_data(file_path)
+        df = get_journal_data(file_path_transaction_history)
         # Dynamically generate columns, but modify the Date column to include format
         columns = [{"name": i, "id": i} for i in df.columns]
 
@@ -702,11 +658,11 @@ def render_content(tab):
             ),
             html.Br(),
             html.Br(),
-            dcc.Graph(figure=plot_return_distribution(get_journal_data(file_path)),
+            dcc.Graph(figure=plot_return_distribution(get_journal_data(file_path_transaction_history)),
                       style={'width': '900px', 'height': '450px'}),
 
             html.Br(),
-            dcc.Graph(figure=butterfly_PnL_plot(get_journal_data(file_path)),
+            dcc.Graph(figure=butterfly_PnL_plot(get_journal_data(file_path_transaction_history)),
                       style={'width': '500px', 'height': '300px'})
         ])
 
