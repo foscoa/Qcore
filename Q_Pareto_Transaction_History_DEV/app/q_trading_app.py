@@ -35,7 +35,7 @@ NLV = sample_data['NLV'].unique()[0]
 sample_data.drop(['Report Time', 'NLV'], axis=1, inplace=True)
 
 
-def get_number_postions(df):
+def get_number_positions(df):
     nr_positions = df["Status"].value_counts().to_dict()
     if 'working' not in nr_positions.keys():
         nr_positions['working'] = 0
@@ -361,12 +361,12 @@ def render_content(tab):
                 col["format"] = dict(specifier='.4~f')
             elif ((col["id"] == 'Risk (EUR)') | (col["id"] == 'Exposure (EUR)') |
                   (col["id"] == 'UnRlzdPnL(EUR)') | (col["id"] == 'Rlzd PnL (EUR)') |
-                  (col["id"] == 'Tot PnL (EUR)')):
+                  (col["id"] == 'Tot PnL (EUR)') | (col["id"] == 'maxL/minP (EUR)')):
                 col["type"] = "numeric"
                 col["format"] = Format(precision=2, scheme=Scheme.decimal_integer,
                                        group_delimiter="'", group=Group.yes, groups=[3])
             elif ((col["id"] == 'Risk (bps)') | (col["id"] == 'Rlzd PnL (bps)') |
-                  (col["id"] == 'UnRlzdPnL(bps)') | (col["id"] == 'Tot PnL (bps)')):
+                  (col["id"] == 'UnRlzdPnL(bps)') | (col["id"] == 'Tot PnL (bps)')| (col["id"] == 'maxL/minP (bps)')):
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.0~f')
 
@@ -430,11 +430,11 @@ def render_content(tab):
                 html.Table([
                     html.Tr([
                         html.Td("Open Positions:", style={"fontWeight": "bold", "paddingRight": "10px"}),
-                        html.Td(str(get_number_postions(sample_data)['open']))
+                        html.Td(str(get_number_positions(sample_data)['open']))
                     ]),
                     html.Tr([
                         html.Td("Working Positions:", style={"fontWeight": "bold", "paddingRight": "10px"}),
-                        html.Td(str(get_number_postions(sample_data)['working']))
+                        html.Td(str(get_number_positions(sample_data)['working']))
                     ]),
                     html.Tr([
                         html.Td("Net Liquidation Value (NLV):", style={"fontWeight": "bold", "paddingRight": "10px"}),

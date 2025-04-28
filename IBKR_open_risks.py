@@ -12,7 +12,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04252025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04262025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -544,10 +544,9 @@ for conid in risk_df['ConID'].unique():
             last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
         elif position_status == "working":
-            exposure = 0
-            open_position = 0
-            rlzd_PnL = 0
-            unrlzd_PnL = 0
+            exposure = np.nan
+            rlzd_PnL = np.nan
+            unrlzd_PnL = np.nan
 
             groups = {k: v for k, v in sub_df.groupby('Quantity')}
 
@@ -585,6 +584,8 @@ for conid in risk_df['ConID'].unique():
                                     ', Dist: ' + (abs(lastPX - triggers[type]) / lastPX * 100).round(2).astype(
                                 str) + '%').str.cat(sep=' | ')
 
+                    open_position = triggers['Quantity'].values[0].astype(int)
+
                     risk = (stops.Quantity * multiplier * (stops['Stop Price'] - triggers[type]) * stops.dir).sum() / fx
 
                     new_row = pd.DataFrame(data={
@@ -618,8 +619,8 @@ for conid in risk_df['ConID'].unique():
                     last_risk = pd.concat([last_risk, new_row], ignore_index=True)
 
         elif position_status == "closed":
-            exposure = 0
-            open_position = 0
+            exposure = np.nan
+            open_position = np.nan
             rlzd_PnL = sum(
                     fill.commissionReport.realizedPNL
                     for fills_list in sub_df['Fills']
@@ -627,9 +628,9 @@ for conid in risk_df['ConID'].unique():
             )
             if conid in df_open_rzld_pnl.index:
                 rlzd_PnL += df_open_rzld_pnl[conid]
-            unrlzd_PnL = 0
+            unrlzd_PnL = np.nan
             position = 'CLOSED'
-            risk = 0
+            risk = np.nan
             string_stops = np.nan
 
             new_row = pd.DataFrame(data={
@@ -664,6 +665,19 @@ for conid in risk_df['ConID'].unique():
 
 last_risk['NLV'] = NLV
 last_risk['Report Time'] = report_time.strftime("%A, %d %B %Y - %H:%M:%S %Z")
+
+
+last_risk['maxL/minP (EUR)'] = np.where(last_risk["Status"] != 'working',
+                                        last_risk['Tot PnL (EUR)'] - last_risk['Risk (EUR)'], np.nan)
+last_risk['maxL/minP (bps)'] = (last_risk['maxL/minP (EUR)']/NLV)*10000
+
+
+last_risk = last_risk[['Status', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Name',
+       'Asset Class', 'Position', 'Contracts', 'Risk (EUR)', 'Risk (bps)','maxL/minP (EUR)', 'maxL/minP (bps)',
+       'Rlzd PnL (EUR)', 'Rlzd PnL (bps)', 'UnRlzdPnL(EUR)', 'UnRlzdPnL(bps)',
+       'Tot PnL (EUR)', 'Tot PnL (bps)', 'Exposure (EUR)', 'Expos. (%)',
+       'Stop or Trigger', 'ATR 30D', 'ATR 30D (%)', 'multiplier', 'Last Price',
+       'ConID', 'NLV', 'Report Time']]
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
 last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
