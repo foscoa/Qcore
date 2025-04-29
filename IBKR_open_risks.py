@@ -4,7 +4,6 @@ import numpy as np
 from datetime import datetime
 import pytz
 
-from IBKR_open_orders import open_positions
 
 # Connect to IBKR Gateway or TWS
 ib = IB()
@@ -12,7 +11,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04262025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04292025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -337,8 +336,8 @@ contracts_quoted_USd = {526262864: 100,
                         577421489: 100,
                         532513438: 100,
                         573366572: 100,
-
-                        #656391483: 100
+                        725809839: 100, # Feeder Cattle
+                        577421487: 100  # Coffee "C"
 }
 
 def addLastPX(df):
@@ -478,8 +477,17 @@ for conid in risk_df['ConID'].unique():
                 exposure = (sub_df.Position * sub_df.LastPX).values[0]
 
             rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0] / fx
-            if conid in df_open_rzld_pnl.index:
-                rlzd_PnL += df_open_rzld_pnl[conid]
+
+            if conid in open_rzld_pnl.Conid.unique():
+
+                conid_rlzd_pnl = open_rzld_pnl.query('Conid == @conid')
+                closed_same_contract = (conid_rlzd_pnl.Quantity.cumsum() == 0)
+                if closed_same_contract.sum() != 0:
+                    last_exec = np.where(conid_rlzd_pnl.Quantity.cumsum() == 0)[0][-1]
+                else:
+                    last_exec = -1
+                rlzd_PnL += conid_rlzd_pnl.FifoPnlRealizedToBase.iloc[(last_exec+1):].sum()
+
             unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] / fx
 
             stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders

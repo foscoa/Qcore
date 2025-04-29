@@ -6,10 +6,10 @@ import pandas as pd
 
 import win32com.client as win32
 
-daily_PnL = 7373  # EUR, from IBKR
+daily_PnL = -22307  # EUR, from IBKR
 
-est_MTD = -0.08     # previous day, % from Paul's daily estimate
-est_YTD = -1.81     # previous day, % from Paul's daily estimate
+est_MTD = +0.04     # previous day, % from Paul's daily estimate
+est_YTD = -1.69     # previous day, % from Paul's daily estimate
 
 today = datetime.today().strftime('%d %B %Y')
 
@@ -50,7 +50,7 @@ def generate_pnl_table(daily_PnL):
 def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
     returns = {
         "Jan": "-0.98%",
-        "Feb": "-1.63%",
+        "Feb": "-1.56%",
         "Mar": "+0.81%",
         "Apr": curr_MTD + "*",
         "May": "",
@@ -66,7 +66,7 @@ def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
 
     # Start HTML table
     html = """
-    <h3>Monthly Returns 2025</h3>
+    <h3>Monthly Returns 2025 - Q Pareto Trading Fund SP, Share Class A – Series 1</h3>
     <table>
     <tr>
     """
@@ -199,7 +199,7 @@ def generate_full_email_body():
     html += generate_pnl_table(daily_PnL)
     html += generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD)
     html += """
-        <p><i>*estimated on: """ + report_time + """</i></p>
+        <p><i>*estimated on """ + report_time + """</i></p>
         </body></html>
         """
     html += generate_fund_exposure_table(df=sample_data)

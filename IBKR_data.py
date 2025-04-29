@@ -70,9 +70,9 @@ if __name__ == "__main__":
         reqId=1,                     # Unique ID for the request
         contract=contract,           # The contract object
         endDateTime="",# End time ("" = current time)
-        durationStr="180 D",           # Duration (e.g., "1 D" = 1 day)
-        barSizeSetting="1 hour",      # Granularity (e.g., "1 min", "5 mins")
-        whatToShow="TRADES",         # Data type: "TRADES", "BID", etc.
+        durationStr="1 Y",           # Duration (e.g., "1 D" = 1 day)
+        barSizeSetting="1 day",      # Granularity (e.g., "1 min", "5 mins")
+        whatToShow="MIDPOINT",         # Data type: "TRADES", "BID", etc.
         useRTH=1,                    # Regular Trading Hours only
         formatDate=1,                # Date format: 1 = human-readable, 2 = UNIX
         keepUpToDate=False,          # Keep receiving live updates (False for static)

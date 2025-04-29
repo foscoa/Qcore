@@ -1,5 +1,5 @@
 ﻿symbol,secType,exchange,currency,lastTradeDateOrContractMonth,strike,multiplier
-CT,FUT,NYBOT,USD,202505,0,50000
+CT,FUT,NYBOT,USD,202507,0,50000
 ZW,FUT,CBOT,USD,202503,0,5000
 KE,FUT,CBOT,USD,202503,0,5000
 ZC,FUT,CBOT,USD,202503,0,5000

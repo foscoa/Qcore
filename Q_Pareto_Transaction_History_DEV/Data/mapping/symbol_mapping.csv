@@ -178,6 +178,7 @@ GCJ4,Gold,Comdty
 GCM4,Gold,Comdty
 GCQ4,Gold,Comdty
 GFF4,Feeder Cattle,Comdty
+GF,Feeder Cattle,Comdty
 GFV3,Feeder Cattle,Comdty
 GFV4,Feeder Cattle,Comdty
 HEJ4,Lean Hogs,Comdty
@@ -193,6 +194,7 @@ JNJn,Johnson and Johnson,Equity
 KCK4,Coffee C,Comdty
 KCN4,Coffee C,Comdty
 KCZ4,Coffee C,Comdty
+KC,Coffee C,Comdty
 KE   DEC 23,Hard Red Winter Wheat,Comdty
 KEN4,Hard Red Winter Wheat,Comdty
 KRE, SPDR S&P Regional Banking,Eqty Idx
