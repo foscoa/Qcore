@@ -6,10 +6,10 @@ import pandas as pd
 
 import win32com.client as win32
 
-daily_PnL = -22307  # EUR, from IBKR
+daily_PnL = +4612  # EUR, from IBKR
 
-est_MTD = +0.04     # previous day, % from Paul's daily estimate
-est_YTD = -1.69     # previous day, % from Paul's daily estimate
+est_MTD = -0.31     # previous day, % from Paul's daily estimate
+est_YTD = -2.03     # previous day, % from Paul's daily estimate
 
 today = datetime.today().strftime('%d %B %Y')
 
@@ -225,7 +225,7 @@ def send_outlook_email(subject, html_body, recipients):
     mail.To = recipients  # Example: "example@example.com;another@example.com"
 
     # Set the sender's email (optional, defaults to your Outlook account)
-    mail.Sender = "fosco.antognini@qcore.ch"  # Optional: Can be used when sending on behalf of someone else
+    mail.Sender = "fa@qcore.group"  # Optional: Can be used when sending on behalf of someone else
 
     mail.BodyFormat = 2  # 2 = HTML
     mail.HTMLBody = html_body

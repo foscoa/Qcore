@@ -11,7 +11,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04292025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04302025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -227,56 +227,6 @@ symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symb
 risk_df['Name'] = risk_df.Symbol.map(symbol_mapping.name.to_dict())
 risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
 
-def positionsHistPrices(df, durationStr, barSizeSetting):
-    # Define a dictionary to store the close prices
-    close_prices_dict = {}
-    ATR_30 = {}
-
-    for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
-
-        conid = int(conid)
-        exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
-        contract = Contract(conId=conid, exchange=exchange)
-
-        # Request historical data
-        bars = ib.reqHistoricalData(
-            contract,
-            endDateTime='',        # '' means the latest available data
-            durationStr=durationStr,     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
-            barSizeSetting=barSizeSetting,  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
-            whatToShow='MIDPOINT',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
-            useRTH=True,           # Regular Trading Hours only
-            formatDate=1
-        )
-        ib.sleep(1)  # Allow time to fetch market data
-
-        # Convert the historical data to a pandas DataFrame
-        ts_df = util.df(bars)
-
-        # Extract only the date and close price
-        ts_df.set_index('date', inplace=True)
-        ts_close = ts_df[['close']]
-
-        period = 30
-        # Compute True Range (TR)
-        ts_df['Previous Close'] = ts_df['close'].shift(1)
-        ts_df['High-Low'] = ts_df['high'] - ts_df['low']
-        ts_df['High-PC'] = abs(ts_df['high'] - ts_df['Previous Close'])
-        ts_df['Low-PC'] = abs(ts_df['low'] - ts_df['Previous Close'])
-
-        ts_df['TR'] = ts_df[['High-Low', 'High-PC', 'Low-PC']].max(axis=1)
-
-        ts_df['ATR'] = ts_df['TR'].rolling(window=period).mean()
-        ATR_30[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_df['ATR'].values[-1]
-
-        # Store the close prices in the dictionary with the symbol as the key
-        close_prices_dict[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_close['close']
-
-    # Combine all close price DataFrames into one DataFrame
-    close_prices_df = pd.DataFrame(close_prices_dict)
-
-    return  [close_prices_df, ATR_30]
-
 def addBaseCCYfx(df, ccy):
     # Fetch FX conversion rates to base currency
     base_currency = ccy  # Set your base currency here
@@ -326,8 +276,7 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 nans_lastPX_Ids = {
                     488641260: portfolio_df.query("ConID == 488641260")['Market Price'].values[0], # MDAX cert,
                     230949979 : portfolio_df.query("ConID == 230949979")['Market Price'].values[0], # USD CNH
-                    120551943: 52.40, # NEM
-                    118239195: 70.45
+                    # 120550477: 533.56, # BKR B
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -340,6 +289,13 @@ contracts_quoted_USd = {526262864: 100,
                         577421487: 100  # Coffee "C"
 }
 
+# map CFDs conid with STK
+map_conid = {
+    120550477: Contract(secType='STK', conId=72063691, symbol='BRK B', exchange='SMART', primaryExchange='NYSE', currency='USD', localSymbol='BRK B', tradingClass='BRK B'),
+    230949979: Forex('USDCNH', conId=113342317, exchange='IDEALPRO', localSymbol='USD.CNH', tradingClass='USD.CNH')
+}
+
+
 def addLastPX(df):
     # Fetch FX conversion rates to base currency
     LastPX = nans_lastPX_Ids
@@ -348,16 +304,20 @@ def addLastPX(df):
     for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
 
         conid = int(conid)
-        exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
-        contract = Contract(conId=conid, exchange=exchange)
+        if conid in map_conid.keys():
+            contract = map_conid[conid]
+        else:
+            conid = int(conid)
+            exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
+            contract = Contract(conId=conid, exchange=exchange)
 
         # Request historical data
         bars = ib.reqHistoricalData(
             contract,
             endDateTime='',        # '' means the latest available data
-            durationStr='1 Y',     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
-            barSizeSetting='1 day',  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
-            whatToShow='MIDPOINT',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
+            durationStr='1 D',     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
+            barSizeSetting='1 min',  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
+            whatToShow='TRADES',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
             useRTH=False,           # Regular Trading Hours only
             formatDate=1
         )
@@ -369,6 +329,61 @@ def addLastPX(df):
     df['LastPX'] = df['ConID'].map(LastPX)
 
     return df
+
+def positionsHistPrices(df, durationStr, barSizeSetting):
+    # Define a dictionary to store the close prices
+    close_prices_dict = {}
+    ATR_30 = {}
+
+    for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
+
+        conid = int(conid)
+        if conid in map_conid.keys():
+            contract = map_conid[conid]
+        else:
+            conid = int(conid)
+            exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
+            contract = ib.qualifyContracts(Contract(conId=conid))[0]
+
+        # Request historical data
+        bars = ib.reqHistoricalData(
+            contract,
+            endDateTime='',        # '' means the latest available data
+            durationStr=durationStr,     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
+            barSizeSetting=barSizeSetting,  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
+            whatToShow='MIDPOINT',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
+            useRTH=True,           # Regular Trading Hours only
+            formatDate=1
+        )
+        ib.sleep(1)  # Allow time to fetch market data
+
+        # Convert the historical data to a pandas DataFrame
+        ts_df = util.df(bars)
+
+        # Extract only the date and close price
+        ts_df.set_index('date', inplace=True)
+        ts_close = ts_df[['close']]
+
+        period = 30
+        # Compute True Range (TR)
+        ts_df['Previous Close'] = ts_df['close'].shift(1)
+        ts_df['High-Low'] = ts_df['high'] - ts_df['low']
+        ts_df['High-PC'] = abs(ts_df['high'] - ts_df['Previous Close'])
+        ts_df['Low-PC'] = abs(ts_df['low'] - ts_df['Previous Close'])
+
+        ts_df['TR'] = ts_df[['High-Low', 'High-PC', 'Low-PC']].max(axis=1)
+
+        ts_df['ATR'] = ts_df['TR'].rolling(window=period).mean()
+        ATR_30[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_df['ATR'].values[-1]
+
+        # Store the close prices in the dictionary with the symbol as the key
+        close_prices_dict[df.query('ConID == @conid and Exchange != ""').Symbol.unique()[0]] = ts_close['close']
+
+    # Combine all close price DataFrames into one DataFrame
+    close_prices_df = pd.DataFrame(close_prices_dict)
+
+    return  [close_prices_df, ATR_30]
+
 
 risk_df = addLastPX(risk_df)
 result_query = positionsHistPrices(df = risk_df, durationStr= '1 Y', barSizeSetting= '1 day')

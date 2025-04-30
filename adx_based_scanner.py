@@ -22,35 +22,23 @@ fut_dict['lastTradeDateOrContractMonth'] = str(fut_dict['lastTradeDateOrContract
 
 # Create a general contract
 contract = Contract(**fut_dict)
-details = ib.reqContractDetails(contract)
-contract = Contract(conId=details[0].contract.conId, exchange='ICEUS')
 
-bars = ib.reqHistoricalData(
-    contract=contract,  # The contract object
-    endDateTime="",  # End time ("" = current time)
-    durationStr="1 Y",  # Duration (e.g., "1 D" = 1 day)
-    barSizeSetting="1 day",  # Granularity (e.g., "1 min", "5 mins")
-    whatToShow="MIDPOINT",  # Data type: "TRADES", "BID", etc.
-    useRTH=1,  # Regular Trading Hours only
-    formatDate=1,  # Date format: 1 = human-readable, 2 = UNIX
-    keepUpToDate=False,  # Keep receiving live updates (False for static)
-    chartOptions=[]
-)
 
-df = util.df(bars)
-print(df.tail())
 
 # Helper function to get historical data
 def get_data(contract):
     bars = ib.reqHistoricalData(
-        contract,
-        endDateTime='',
-        durationStr='2 D',
-        barSizeSetting='5 mins',
-        whatToShow='TRADES',
-        useRTH=False,
-        formatDate=1
+        contract=contract,  # The contract object
+        endDateTime="",  # End time ("" = current time)
+        durationStr="1 Y",  # Duration (e.g., "1 D" = 1 day)
+        barSizeSetting="1 day",  # Granularity (e.g., "1 min", "5 mins")
+        whatToShow="TRADES",  # Data type: "TRADES", "BID", etc.
+        useRTH=1,  # Regular Trading Hours only
+        formatDate=1,  # Date format: 1 = human-readable, 2 = UNIX
+        keepUpToDate=False,  # Keep receiving live updates (False for static)
+        chartOptions=[]
     )
+
     df = util.df(bars)
     return df if not df.empty else None
 
@@ -74,7 +62,7 @@ def check_adx_signal(df, threshold=25):
 # Main scan loop
 results = []
 
-for fut in futures:
+for fut in fut_specs:
     df = get_data(fut)
     if df is not None and len(df) > 20:
         signal = check_adx_signal(df)
