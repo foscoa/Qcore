@@ -11,7 +11,7 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 def get_realized_PnL():
     # Define the file path
-    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_04302025.csv"
+    file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05022025.csv"
     # Read the CSV file
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
@@ -150,6 +150,8 @@ def get_realized_PnL():
     return  open_filter_df
 open_rzld_pnl = get_realized_PnL()
 
+flag_update_corr = True
+
 # Fetch open positions
 positions = ib.positions()
 positions_df = pd.DataFrame([
@@ -275,7 +277,7 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 nans_lastPX_Ids = {
                     488641260: portfolio_df.query("ConID == 488641260")['Market Price'].values[0], # MDAX cert,
-                    230949979 : portfolio_df.query("ConID == 230949979")['Market Price'].values[0], # USD CNH
+                    230949979 : 7.2435
                     # 120550477: 533.56, # BKR B
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
@@ -292,7 +294,8 @@ contracts_quoted_USd = {526262864: 100,
 # map CFDs conid with STK
 map_conid = {
     120550477: Contract(secType='STK', conId=72063691, symbol='BRK B', exchange='SMART', primaryExchange='NYSE', currency='USD', localSymbol='BRK B', tradingClass='BRK B'),
-    230949979: Forex('USDCNH', conId=113342317, exchange='IDEALPRO', localSymbol='USD.CNH', tradingClass='USD.CNH')
+    230949979: Forex('USDCNH', conId=113342317, exchange='IDEALPRO', localSymbol='USD.CNH', tradingClass='USD.CNH'),
+    166176201: Contract(secType='STK', conId=166090175, symbol='BABA', exchange='SMART', primaryExchange='NYSE', currency='USD', localSymbol='BABA', tradingClass='BABA')
 }
 
 
@@ -389,14 +392,40 @@ risk_df = addLastPX(risk_df)
 result_query = positionsHistPrices(df = risk_df, durationStr= '1 Y', barSizeSetting= '1 day')
 ts = result_query[0]
 ATR_30 = result_query[1]
-ts_ret = ts.copy().pct_change().dropna()
-corr = ts_ret.corr()
+
+# correlation, assumption
+def calculate_correlation(durationStr= '1 M', barSizeSetting= '30 mins'):
+    time_series_prices = positionsHistPrices(df = risk_df, durationStr= durationStr, barSizeSetting= barSizeSetting)[0]
+    time_series_ret = time_series_prices.copy().pct_change(fill_method=None) # fill_method=None to keep NANs
+    corr = time_series_ret.corr()
+
+    return corr
 
 # log report time
 # Set timezone to Zurich
 zurich_tz = pytz.timezone('Europe/Zurich')
 # Get current time in Zurich
 report_time = datetime.now(zurich_tz)
+
+
+if flag_update_corr == True:
+
+    durationStr = '1 M'
+    barSizeSetting = '30 mins'
+
+    corr = calculate_correlation(durationStr= durationStr, barSizeSetting= barSizeSetting)
+    corr.to_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv")
+
+    # log assumptions
+    corr_assumptions = {
+        "report_time": report_time.strftime("%A, %d %B %Y - %H:%M:%S %Z"),
+        "barSizeSetting": barSizeSetting,
+        "durationStr": durationStr
+    }
+
+    # write assumptions
+    pd.DataFrame([corr_assumptions]).to_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix_ass.csv", index=False)
+
 
 
 risk_df.replace('', np.nan, inplace=True)
@@ -610,6 +639,7 @@ for conid in risk_df['ConID'].unique():
                     open_position = triggers['Quantity'].values[0].astype(int)
 
                     risk = (stops.Quantity * multiplier * (stops['Stop Price'] - triggers[type]) * stops.dir).sum() / fx
+                    exposure = abs((stops.Quantity * multiplier * triggers[type] * stops.dir).sum()) / fx
 
                     new_row = pd.DataFrame(data={
                         'Status': [position_status],
@@ -648,9 +678,19 @@ for conid in risk_df['ConID'].unique():
                     fill.commissionReport.realizedPNL
                     for fills_list in sub_df['Fills']
                     for fill in fills_list
-            )
-            if conid in df_open_rzld_pnl.index:
-                rlzd_PnL += df_open_rzld_pnl[conid]
+            ) /fx
+
+            if conid in open_rzld_pnl.Conid.unique():
+
+                conid_rlzd_pnl = open_rzld_pnl.query('Conid == @conid')
+                closed_same_contract = (conid_rlzd_pnl.Quantity.cumsum() == 0)
+                if closed_same_contract.sum() != 0:
+                    last_exec = np.where(conid_rlzd_pnl.Quantity.cumsum() == 0)[0][-1]
+                else:
+                    last_exec = -1
+                rlzd_PnL += conid_rlzd_pnl.FifoPnlRealizedToBase.iloc[(last_exec + 1):].sum()
+
+
             unrlzd_PnL = np.nan
             position = 'CLOSED'
             risk = np.nan
@@ -704,7 +744,7 @@ last_risk = last_risk[['Status', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Na
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
 last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
-corr.to_csv("Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv")
+
 
 # Disconnect from IBKR
 ib.disconnect()

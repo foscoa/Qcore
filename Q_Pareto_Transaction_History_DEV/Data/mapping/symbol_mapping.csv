@@ -107,6 +107,7 @@ AMZNn,Amazon Inc,Equity
 ARKK,ARK Innovation ETF,Eqty Idx
 AVGOn,Broadcom Inc,Equity
 BAYNd,Bayer AG,Equity
+BABA,ALIBABA Group ADR,Equity
 BMWd,BMW,Equity
 BRK B,Berkshire Hathaway,Equity
 BTCM3,CME CF Bitcoin,Crypto
@@ -188,6 +189,7 @@ HGU3,Copper,Comdty
 HGZ4,Copper,Comdty
 HOQ3,Heating Oil,Comdty
 IZ3,3M EURIBOR Interest Rate,Rates
+I,3M EURIBOR Interest Rate,Rates
 IBBn,IShares Biotech ETF,Eqty Idx
 IYT,IShares US Transportation ETF,Eqty Idx
 JNJn,Johnson and Johnson,Equity

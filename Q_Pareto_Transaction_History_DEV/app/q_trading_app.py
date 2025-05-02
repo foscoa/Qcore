@@ -16,6 +16,7 @@ file_path_transaction_history_AMC = 'Q_Pareto_Transaction_History_DEV/Data/AMC_t
 file_path_open_risks = "Q_Pareto_Transaction_History_DEV/Data/open_risks.csv"
 asst_path = os.path.dirname(os.path.abspath(__name__)) + '/Q_Pareto_Transaction_History_DEV/assets/'
 file_path_corr_matrix= "Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv"
+file_path_corr_matrix_ass= "Q_Pareto_Transaction_History_DEV/Data/corr_matrix_ass.csv"
 file_path_manual_entries = 'Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history_manual_entries.xls'
 
 # Initialize app
@@ -44,8 +45,41 @@ def get_number_positions(df):
         nr_positions['open'] = 0
     return nr_positions
 
-def get_corr_matrix():
-    return pd.read_csv(file_path_corr_matrix, index_col=0)
+def plot_corr_matrix():
+
+    corr_matrix = pd.read_csv(file_path_corr_matrix, index_col=0).round(2).transpose()
+
+    # Create Heatmap
+    fig = ff.create_annotated_heatmap(
+        z=corr_matrix.values,
+        x=list(corr_matrix.columns),
+        y=list(corr_matrix.index),
+        colorscale="RdBu_r",  # Use a valid Plotly colorscale
+        annotation_text=corr_matrix.values,
+        showscale=False,
+        zmin=-1,  # Set minimum value of color scale
+        zmax=1,  # Set maximum value of color scale
+        font_colors=["black"]  # Set annotation text color to black
+    )
+
+    # Improve Layout
+    fig.update_layout(
+        xaxis=dict(side="bottom"),
+        # width=480,
+        # height=400,
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="#f8f9fa",  # Background color of the entire figure
+        plot_bgcolor="#f8f9fa"  # Background color of the plot area
+    )
+
+    return fig
+
+def get_string_corr_ass():
+
+    corr_matrix_ass = pd.read_csv(file_path_corr_matrix_ass, index_col=False)
+
+    return ("Data as of " + corr_matrix_ass.report_time.values[0] + " | Time frame: " + corr_matrix_ass.durationStr.values[0] +
+            " | Granularity: " + corr_matrix_ass.barSizeSetting.values[0])
 
 def get_journal_data(file_path_transaction_history):
 
@@ -383,33 +417,6 @@ def render_content(tab):
                 col["format"] = dash_table.FormatTemplate.percentage(2)
 
 
-
-        # Compute Correlation Matrix
-        corr_matrix = get_corr_matrix().round(2)
-
-        # Create Heatmap
-        fig = ff.create_annotated_heatmap(
-            z=corr_matrix.values,
-            x=list(corr_matrix.columns),
-            y=list(corr_matrix.index),
-            colorscale="RdBu_r",  # Use a valid Plotly colorscale
-            annotation_text=corr_matrix.values,
-            showscale=False,
-            zmin=-1,  # Set minimum value of color scale
-            zmax=1,  # Set maximum value of color scale
-            font_colors = ["black"]  # Set annotation text color to black
-        )
-
-        # Improve Layout
-        fig.update_layout(
-            xaxis=dict(side="bottom"),
-            width=480,
-            height=400,
-            margin=dict(l=10, r=10, t=10, b=10),
-            paper_bgcolor="#f8f9fa",  # Background color of the entire figure
-            plot_bgcolor="#f8f9fa"  # Background color of the plot area
-        )
-
         return html.Div([
 
             # Report time outside the table, at the top
@@ -548,9 +555,21 @@ def render_content(tab):
             ),
             html.H4("Jan-F // Feb-G // Mar-H  // Apr-J  // May-K  // Jun-M  // Jul-N  // Aug-Q  // Sep-U  // Oct-V  // Nov-X  // Dec-Z",
                     style={"color": "darkgray"}),
-            html.Br(),
-            # html.H3("Correlation Matrix Heatmap"),
-            #dcc.Graph(figure=fig)  # Render heatmap
+
+            html.H3("Correlation Matrix Heatmap",  style={
+                    "marginBottom": "10px",
+                    "color": "#12365a",
+                    "fontSize": "20px"
+                }),
+
+            html.P(get_string_corr_ass(), style={
+                "fontSize": "12px",
+                "fontStyle": "italic",
+                "color": "#7f8c8d",
+                "marginBottom": "8px"
+            }),
+
+            dcc.Graph(figure=plot_corr_matrix(),  style={'width': '50%'})  # Render heatmap
         ])
     elif tab == 'journal':
         df = get_journal_data(file_path_transaction_history)
