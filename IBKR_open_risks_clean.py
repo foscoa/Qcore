@@ -3,55 +3,46 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 import pytz
+from pathlib import Path
+from typing import List
+
+DATA_DIR = Path("Q_Pareto_Transaction_History_DEV/Data")
+TRADE_HISTORY_FILE = DATA_DIR / "U15721173_TradeHistory_05052025.csv"
+SYMBOL_MAPPING_FILE = DATA_DIR / "mapping/symbol_mapping.csv"
 
 
-# Connect to IBKR Gateway or TWS
-ib = IB()
-ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
-
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05052025.csv"
-def get_realized_PnL(file_path):
-    # Define the file path
-
-    # Read the CSV file
+def load_trade_data(file_path: Path) -> pd.DataFrame:
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.replace("/", "_", regex=False)
+    return df
 
-    master_df = df.copy().query(
-        'LevelOfDetail == "EXECUTION" & (Open_CloseIndicator == "C" or Open_CloseIndicator == "O")')
+def clean_and_filter_data(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.query('LevelOfDetail == "EXECUTION" and Open_CloseIndicator in ["C", "O"]')
 
-    # clean DateTime
-    # Remove single quotes and replace ";" with a space
-    clean_date = master_df.DateTime.str.replace(";", " ")
+    # Clean datetime
+    df['DateTime_clean'] = pd.to_datetime(
+        df['DateTime'].str.replace(";", " "), format="%Y%m%d %H%M%S"
+    ).dt.tz_localize('America/New_York').dt.tz_convert('Europe/Berlin').dt.tz_localize(None)
 
-    # Convert to datetime in CET timezone
-    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format="%Y%m%d %H%M%S").dt.tz_localize(
-        'America/New_York').dt.tz_convert('Europe/Berlin').dt.tz_localize(None)
+    # Sort by datetime
+    df = df.sort_values(by='DateTime_clean', ascending=False)
 
-    # Sort by Time
-    master_df = master_df.copy().sort_values(by='DateTime_clean', ascending=False)
+    # Derived fields
+    df['FifoPnlRealizedToBase'] = df['FifoPnlRealized'] * df['FXRateToBase']
+    df['NotionaltoBase'] = df['Quantity'].abs() * df['Multiplier'] * df['FXRateToBase'] * df['TradePrice']
+    df['Position'] = df['Buy_Sell'].map({'SELL': 'SHORT', 'BUY': 'LONG'})
 
-    # Adding FifoPnlRealzed in Base Currency
-    master_df['FifoPnlRealizedToBase'] = master_df.FifoPnlRealized * master_df.FXRateToBase
+    return df
 
-    # Adding NotionaltoBase
-    master_df[
-        'NotionaltoBase'] = master_df.Quantity.abs() * master_df.Multiplier * master_df.FXRateToBase * master_df.TradePrice
+def map_symbols(df: pd.DataFrame, symbol_mapping_file: Path) -> pd.DataFrame:
+    symbol_mapping = pd.read_csv(symbol_mapping_file, index_col=0)
+    df['Name'] = df['UnderlyingSymbol'].map(symbol_mapping.name.to_dict())
+    df['Asset Class'] = df['UnderlyingSymbol'].map(symbol_mapping.assetClass.to_dict())
+    return df
 
-    # Direction
-    master_df['Position'] = master_df.Buy_Sell.map({'SELL': 'SHORT', 'BUY': 'LONG'})
-
-    symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symbol_mapping.csv',
-                                 header=0,
-                                 index_col=0)
-    # Mapping Symbol
-    master_df['Name'] = master_df.UnderlyingSymbol.map(symbol_mapping.name.to_dict())
-    master_df['Asset Class'] = master_df.UnderlyingSymbol.map(symbol_mapping.assetClass.to_dict())
-
-    # Display the first few rows
-    # Define the aggregation dictionary
-    agg_dict_IBOrderID = {
-        # **Categorical Columns**: Keep the first non-null occurrence (assuming they are the same within a group)
+def aggregate_by_order_id(df: pd.DataFrame) -> pd.DataFrame:
+    aggregation_rules = {
+        # Categorical
         'ClientAccountID': 'first',
         'CurrencyPrimary': 'first',
         'Symbol': 'first',
@@ -59,16 +50,16 @@ def get_realized_PnL(file_path):
         'Conid': 'first',
         'SecurityID': 'first',
         'ListingExchange': 'first',
-        'TradeID': lambda x: ', '.join(x.astype(str).unique()),  # Keep all unique TradeIDs
+        'TradeID': lambda x: ', '.join(x.astype(str).unique()),
         'Multiplier': 'first',
         'Strike': 'first',
         'Expiry': 'first',
         'Put_Call': 'first',
         'TradeDate': 'first',
         'TransactionID': 'first',
-        'IBExecID': lambda x: ', '.join(x.astype(str).unique()),  # Keep unique executions
-        'OrderTime': lambda x: ', '.join(x.astype(str).unique()),  # Keep unique executions
-        'FXRateToBase': 'mean',  # Weighted average trade price,  # Averaging the FX rate makes sense
+        'IBExecID': lambda x: ', '.join(x.astype(str).unique()),
+        'OrderTime': lambda x: ', '.join(x.astype(str).unique()),
+        'FXRateToBase': 'mean',
         'AssetClass': 'first',
         'Name': 'first',
         'Asset Class': 'first',
@@ -98,137 +89,152 @@ def get_realized_PnL(file_path):
         'DateTime_clean': 'first',
         'Position': 'first',
 
-        # **Numerical Columns**: Use appropriate aggregations
-        'Quantity': 'sum',  # Sum of traded quantities
-        'TradePrice': 'mean',  # ,  # Weighted average trade price
-        'IBCommission': 'sum',  # Total commission paid
-        'CostBasis': 'sum',  # Aggregate cost basis
-        'NotionaltoBase': 'sum',  # Aggregate cost basis to base
-        'FifoPnlRealized': 'sum',  # Realized profit and loss
-        'FifoPnlRealizedToBase': 'sum',  # Realized PnL converted to base currency
-        'TradeMoney': 'sum',  # Total trade money
-        'Proceeds': 'sum',  # Total proceeds
-        'NetCash': 'sum',  # Net cash impact
+        # Numeric
+        'Quantity': 'sum',
+        'TradePrice': 'mean',
+        'IBCommission': 'sum',
+        'CostBasis': 'sum',
+        'NotionaltoBase': 'sum',
+        'FifoPnlRealized': 'sum',
+        'FifoPnlRealizedToBase': 'sum',
+        'TradeMoney': 'sum',
+        'Proceeds': 'sum',
+        'NetCash': 'sum',
         'ClosePrice': 'mean',
-    }  # Average closing price
+    }
 
-    aggregated_df = master_df.copy().groupby(['IBOrderID']).agg(agg_dict_IBOrderID).reset_index().sort_values(
-        by='DateTime_clean',
-        ascending=True)
-    filter_df = aggregated_df[[
-        # Basic Trade Information
-        'DateTime_clean',
-        'Symbol',
-        'Description',
-        'Name',
+    return df.groupby('IBOrderID').agg(aggregation_rules).reset_index().sort_values(by='DateTime_clean')
 
-        # Trade Metrics
-        'Quantity',
-        'TradePrice',
-        'NotionaltoBase',
-        'FifoPnlRealizedToBase',
-        'Multiplier',
+def filter_open_positions(df: pd.DataFrame) -> pd.DataFrame:
+    open_q = df.groupby('Conid', as_index=False)['Quantity'].sum()
+    open_conids = open_q.query('Quantity != 0')['Conid'].tolist()
+    return df[df['Conid'].isin(open_conids)]
 
-        # Financial Instrument Information
-        'Asset Class',
-        'AssetClass',
-        'CurrencyPrimary',
-        'FXRateToBase',
-        'Open_CloseIndicator',
-        'Position',
+def get_realized_pnl(file_path: Path = TRADE_HISTORY_FILE,
+                     symbol_map_path: Path = SYMBOL_MAPPING_FILE) -> pd.DataFrame:
+    raw_df = load_trade_data(file_path)
+    cleaned_df = clean_and_filter_data(raw_df)
+    mapped_df = map_symbols(cleaned_df, symbol_map_path)
+    aggregated_df = aggregate_by_order_id(mapped_df)
 
-        # Transaction Details
-        'IBOrderID',
-        'Conid',
-        'Exchange',
-    ]]
+    columns_of_interest = [
+        'DateTime_clean', 'Symbol', 'Description', 'Name', 'Quantity', 'TradePrice', 'NotionaltoBase',
+        'FifoPnlRealizedToBase', 'Multiplier', 'Asset Class', 'AssetClass', 'CurrencyPrimary',
+        'FXRateToBase', 'Open_CloseIndicator', 'Position', 'IBOrderID', 'Conid', 'Exchange'
+    ]
+    filtered_df = aggregated_df[columns_of_interest]
+    open_positions_df = filter_open_positions(filtered_df)
 
-    # open quantity
-    open_q = filter_df.groupby('Conid', as_index=False)['Quantity'].sum()
-    open_conid = list(open_q.query('Quantity != 0').Conid)
-    open_filter_df = filter_df.query('Conid in @open_conid')
+    return open_positions_df
 
-    return  open_filter_df
-open_rzld_pnl = get_realized_PnL(file_path=file_path)
+open_rzld_pnl = get_realized_pnl()
 
-flag_update_corr = True
+#####
 
-# Fetch open positions
-positions = ib.positions()
-positions_df = pd.DataFrame([
-    {
-        'ConID': pos.contract.conId,
-        'Symbol': pos.contract.symbol,
-        'Local Symbol': pos.contract.localSymbol,
-        'SecType': pos.contract.secType,
-        'Exchange': pos.contract.exchange,
-        'Currency': pos.contract.currency,
-        'Multiplier': pos.contract.multiplier if hasattr(pos.contract, 'multiplier') else 1,
-        'Position': pos.position,
-        'Avg Cost': pos.avgCost
-    } for pos in positions
-])
+# === IB Connection ===
+def connect_ibkr(host: str = '127.0.0.1', port: int = 7496, client_id: int = 1) -> IB:
+    ib = IB()
+    ib.connect(host, port, clientId=client_id)
+    return ib
 
-# Request all open orders (manual + API)
-ib.reqAllOpenOrders()
-trades = ib.trades()  # Fetch updated order list with contracts
-# Convert trades to DataFrame
-orders_df = pd.DataFrame([
-    {
-        'PermID': trade.order.permId,
-        'ConID': trade.contract.conId,
-        'Symbol': trade.contract.symbol,
-        'Local Symbol': trade.contract.localSymbol,
-        'SecType': trade.contract.secType,
-        'Exchange': trade.contract.exchange,
-        'Currency': trade.contract.currency,
-        'Multiplier': trade.contract.multiplier if hasattr(trade.contract, 'multiplier') else 1,
-        'Order Type': trade.order.orderType,
-        'Quantity': trade.order.totalQuantity,
-        'Action': trade.order.action,
-        'Limit Price': trade.order.lmtPrice if hasattr(trade.order, 'lmtPrice') else None,
-        'Stop Price': trade.order.auxPrice if hasattr(trade.order, 'auxPrice') else None,
-        'Status': trade.orderStatus.status,
-        'Fills': trade.fills
-    } for trade in trades if trade.order  # Ensure order exists
-])
 
-portfolio = ib.portfolio()
-portfolio_df = pd.DataFrame([
-    {
-        'ConID': pos.contract.conId,
-        'Symbol': pos.contract.symbol,
-        'Position': pos.position,
-        'Unrealized PnL': pos.unrealizedPNL,
-        'Realized PnL': pos.realizedPNL, # Directly from IBKR!
-        'Market Price': pos.marketPrice,
+# === Data Retrieval ===
+def fetch_positions(ib: IB) -> pd.DataFrame:
+    positions: List[Position] = ib.positions()
+    return pd.DataFrame([
+        {
+            'ConID': pos.contract.conId,
+            'Symbol': pos.contract.symbol,
+            'Local Symbol': pos.contract.localSymbol,
+            'SecType': pos.contract.secType,
+            'Exchange': pos.contract.exchange,
+            'Currency': pos.contract.currency,
+            'Multiplier': getattr(pos.contract, 'multiplier', 1),
+            'Position': pos.position,
+            'Avg Cost': pos.avgCost
+        }
+        for pos in positions
+    ])
 
-    } for pos in portfolio
-])
+def fetch_open_orders(ib: IB) -> pd.DataFrame:
+    ib.reqAllOpenOrders()
+    trades: List[Trade] = ib.trades()
 
-# print(portfolio_df)
+    return pd.DataFrame([
+        {
+            'PermID': trade.order.permId,
+            'ConID': trade.contract.conId,
+            'Symbol': trade.contract.symbol,
+            'Local Symbol': trade.contract.localSymbol,
+            'SecType': trade.contract.secType,
+            'Exchange': trade.contract.exchange,
+            'Currency': trade.contract.currency,
+            'Multiplier': getattr(trade.contract, 'multiplier', 1),
+            'Order Type': trade.order.orderType,
+            'Quantity': trade.order.totalQuantity,
+            'Action': trade.order.action,
+            'Limit Price': getattr(trade.order, 'lmtPrice', None),
+            'Stop Price': getattr(trade.order, 'auxPrice', None),
+            'Status': trade.orderStatus.status,
+            'Fills': trade.fills
+        }
+        for trade in trades if trade.order
+    ])
 
-# Net Liquidation Value
-account_summary = ib.accountSummary()
-# Convert to DataFrame
-# Convert the list of TagValues to a DataFrame
-account_summary_df = pd.DataFrame([
-    {'Tag': item.tag, 'Value': item.value, 'Currency': item.currency}
-    for item in account_summary
-])
-NLV = float(account_summary_df[account_summary_df['Tag'] == 'NetLiquidation'].Value.values[0])
+def fetch_portfolio(ib: IB) -> pd.DataFrame:
+    portfolio: List[PortfolioItem] = ib.portfolio()
+    return pd.DataFrame([
+        {
+            'ConID': item.contract.conId,
+            'Symbol': item.contract.symbol,
+            'Position': item.position,
+            'Unrealized PnL': item.unrealizedPNL,
+            'Realized PnL': item.realizedPNL,
+            'Market Price': item.marketPrice
+        }
+        for item in portfolio
+    ])
 
-# Merge positions and orders on ConID, Symbol, SecType, Exchange, Currency, Multiplier
-risk_df = positions_df.merge(orders_df, on=['ConID', 'Symbol', 'Local Symbol',
-                                            'SecType', 'Exchange', 'Currency', 'Multiplier'],
-                                        how='outer', suffixes=('_Position', '_Order'))
+def fetch_net_liquidation_value(ib: IB) -> float:
+    summary: List[TagValue] = ib.accountSummary()
+    summary_df = pd.DataFrame([
+        {'Tag': tag.tag, 'Value': tag.value, 'Currency': tag.currency}
+        for tag in summary
+    ])
+    return float(summary_df.loc[summary_df['Tag'] == 'NetLiquidation', 'Value'].values[0])
 
-symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symbol_mapping.csv',
-                             header=0,
-                             index_col=0)
+# === Merging and Mapping ===
+def merge_position_order_data(positions_df: pd.DataFrame,
+                               orders_df: pd.DataFrame) -> pd.DataFrame:
+    return positions_df.merge(
+        orders_df,
+        on=['ConID', 'Symbol', 'Local Symbol', 'SecType', 'Exchange', 'Currency', 'Multiplier'],
+        how='outer',
+        suffixes=('_Position', '_Order')
+    )
 
-risk_df['Name'] = risk_df.Symbol.map(symbol_mapping.name.to_dict())
-risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
+def enrich_with_symbol_mapping(df: pd.DataFrame, mapping_file: Path) -> pd.DataFrame:
+    symbol_mapping = pd.read_csv(mapping_file, index_col=0)
+    df['Name'] = df['Symbol'].map(symbol_mapping.name.to_dict())
+    df['Asset Class'] = df['Symbol'].map(symbol_mapping.assetClass.to_dict())
+    return df
+
+# === Main Risk Overview Builder ===
+def build_ibkr_risk_snapshot() -> pd.DataFrame:
+    ib = connect_ibkr()
+    positions_df = fetch_positions(ib)
+    orders_df = fetch_open_orders(ib)
+    portfolio_df = fetch_portfolio(ib)
+    nlv = fetch_net_liquidation_value(ib)
+
+    risk_df = merge_position_order_data(positions_df, orders_df)
+    risk_df = enrich_with_symbol_mapping(risk_df, SYMBOL_MAPPING_FILE)
+
+    print(f"Net Liquidation Value (Base Currency): {nlv:,.2f}")
+    return risk_df
+
+risk_snapshot_df = build_ibkr_risk_snapshot()
+
 
 def addBaseCCYfx(df, ccy):
     # Fetch FX conversion rates to base currency
@@ -288,7 +294,6 @@ contracts_quoted_USd = {526262864: 100,
                         577421489: 100,
                         532513438: 100,
                         573366572: 100,
-                        577421502:  100, # CT
                         725809839: 100, # Feeder Cattle
                         577421487: 100  # Coffee "C"
 }
@@ -746,7 +751,7 @@ last_risk = last_risk[['Status', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Na
        'ConID', 'NLV', 'Report Time']]
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
-last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
+# last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
 
 
 # Disconnect from IBKR

@@ -6,7 +6,7 @@ import numpy as np
     Returns a cleaned and aggregated DataFrame.
     """
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05022025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05052025.csv"
 
 # Read the CSV file
 df = pd.read_csv(file_path)
@@ -170,3 +170,4 @@ def format_duration(duration):
 
 aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuration'].apply(format_duration)
 aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv")
+aggregated_positions_df.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/transaction_history/aggregated_transaction_history.csv")

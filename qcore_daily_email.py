@@ -6,10 +6,10 @@ import pandas as pd
 
 import win32com.client as win32
 
-daily_PnL = +19032  # EUR, from IBKR
+daily_PnL = -11848  # EUR, from IBKR
 
-est_MTD = -0.27     # previous day, % from Paul's daily estimate
-est_YTD = -2.16     # previous day, % from Paul's daily estimate
+est_MTD = -0.06     # previous day, % from Paul's daily estimate
+est_YTD = -1.97     # previous day, % from Paul's daily estimate
 
 today = datetime.today().strftime('%d %B %Y')
 
