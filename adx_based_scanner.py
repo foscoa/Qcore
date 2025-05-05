@@ -15,7 +15,7 @@ fut_specs = pd.read_csv(file_path).to_dict(orient='records')
 
 # Create a contract for E-mini S&P 500 futures
 
-fut_dict = [i for i in fut_specs if i['symbol'] == 'CT'][0]
+fut_dict = [i for i in fut_specs if i['symbol'] == 'CC'][0]
 
 # Convert date to string if needed
 fut_dict['lastTradeDateOrContractMonth'] = str(fut_dict['lastTradeDateOrContractMonth'])
@@ -41,6 +41,8 @@ def get_data(contract):
 
     df = util.df(bars)
     return df if not df.empty else None
+
+df = get_data(contract=contract)
 
 
 # Function to check ADX entry setup
@@ -80,3 +82,8 @@ for r in results:
     print(f"{r['symbol']} ({r['exchange']}): {r['signal']}")
 
 ib.disconnect()
+
+
+
+
+
