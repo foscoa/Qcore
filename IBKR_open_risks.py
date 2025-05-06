@@ -9,7 +9,7 @@ import pytz
 ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05052025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05062025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -277,9 +277,9 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {
-                    488641260: 6.51, # MDAX cert,
-                    230949979 : 7.2435
-                    # 120550477: 533.56, # BKR B
+                    777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
+                    # 230949979 : 515.65,
+                    120550477: portfolio_df[portfolio_df.ConID == 120550477]['Market Price'].values[0], # BKR B
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -491,7 +491,7 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  # 532513438, #ZL
+                  672770480, # kiwi
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
@@ -499,8 +499,8 @@ for conid in risk_df['ConID'].unique():
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
 
         # open and working orders have the same quantity
-        if conid == 532513438:
-            permIDs = [585675972]
+        if conid == 672770480:
+            permIDs = [165041676, 165041675]
             open_sub_df = sub_df.query('PermID not in @permIDs')
             working_sub_df = sub_df.query('PermID in @permIDs')
 

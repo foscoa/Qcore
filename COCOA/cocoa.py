@@ -1,10 +1,11 @@
 import requests
 import pandas as pd
-
+import os
 import plotly.express as px
 from datetime import datetime
 
 from ib_insync import *
+
 
 # Connect to IB Gateway or TWS
 ib = IB()
@@ -72,7 +73,7 @@ producers.reset_index(drop=True, inplace=True)
 # (Mha) area in millition hestares
 
 
-
+# download rain data
 for region in producers.Region:
 
     country = producers.query('Region == @region').Country.values[0]
@@ -117,15 +118,13 @@ for region in producers.Region:
 
     df.to_csv(file_name, index=False)
 
-df_curr = pd.read_csv("./COCOA/PN_data/power_nasa_Esmeraldas_Ecuador.csv",
-                 index_col='date')
 
-import pandas as pd
-import os
+
 
 # Assuming df1 is already defined and loaded
 # Initialize an empty list to collect DataFrames
 precipitation_dfs = []
+temperature_dfs = []
 
 for _, row in producers.iterrows():
     region = row['Region']
@@ -145,6 +144,15 @@ for _, row in producers.iterrows():
         df['Country'] = country
         df['area_mha_perc'] = str(area)
 
+        # Ensure date is in datetime format
+        df['date'] = pd.to_datetime(df['date'])
+
+        # Convert PRECTOT and area_mha_perc to numeric, coercing errors
+        df['PRECTOT'] = pd.to_numeric(df['PRECTOT'], errors='coerce')
+        df['T2M'] = pd.to_numeric(df['T2M'], errors='coerce')
+
+        df['area_mha_perc'] = pd.to_numeric(df['area_mha_perc'], errors='coerce')
+
         # Keep only the relevant columns
         if 'PRECTOT' in df.columns:
             df_precip = df[['PRECTOT']].copy()
@@ -155,22 +163,32 @@ for _, row in producers.iterrows():
             precipitation_dfs.append(df_precip)
         else:
             print(f"PRECTOT not found in file: {file_path}")
+
+        # Keep only the relevant columns
+        if 'T2M' in df.columns:
+            df_t2m = df[['T2M']].copy()
+            df_t2m['date'] = df.index if df.index.name else df.get('date', None)
+            df_t2m['Region'] = region
+            df_t2m['Country'] = country
+            df_t2m['area_mha_perc'] = area
+            temperature_dfs.append(df_t2m)
+        else:
+            print(f"T2M not found in file: {file_path}")
     else:
         print(f"File not found: {file_path}")
 
 # Concatenate all precipitation dataframes
 precipitation_all = pd.concat(precipitation_dfs, ignore_index=True)
+temperature_all = pd.concat(temperature_dfs, ignore_index=True)
+
 
 # Optional: Pivot if you want Region-wise columns
-# precip_pivot = precipitation_all.pivot(index='Date', columns='Region', values='PRECTOT')
+precip_pivot = precipitation_all.pivot(index='date', columns='Region', values='PRECTOT')
+
+precip_pivot['Bas-Sassandra']
 
 # Assuming your DataFrame is called `df`
-# Ensure date is in datetime format
-df['date'] = pd.to_datetime(df['date'])
 
-# Convert PRECTOT and area_mha_perc to numeric, coercing errors
-df['PRECTOT'] = pd.to_numeric(df['PRECTOT'], errors='coerce')
-df['area_mha_perc'] = pd.to_numeric(df['area_mha_perc'], errors='coerce')
 
 # Drop rows with NaNs in these columns
 df = df.dropna(subset=['PRECTOT', 'area_mha_perc'])
