@@ -57,7 +57,7 @@ producers.sort_values(by='Area (Mha) %',
                       inplace=True, kind='quicksort', na_position='last')
 
 producers['(Mha) % cumsum'] =  producers['Area (Mha) %'].cumsum()
-df.reset_index(drop=True, inplace=True)
+producers.reset_index(drop=True, inplace=True)
 
 
 ###  Weather data
@@ -69,7 +69,7 @@ df.reset_index(drop=True, inplace=True)
 # | RH2M                 | Relative humidity at 2m (%)  | `RH2M`              |
 # | ALLSKY_SFC_SW_DWN    | Solar irradiance (W/m²)      | `ALLSKY_SFC_SW_DWN` |
 
-# create an aggreagate measure
+# (Mha) area in millition hestares
 
 
 
@@ -97,8 +97,8 @@ for region in producers.Region:
     # Convert the data into a DataFrame
     df = pd.DataFrame.from_dict(data['properties']['parameter'])
 
-    # Rename the columns to 'RH2M', 'T2M', 'PRECTOTCORR'
-    df.columns = ['RH2M', 'T2M', 'PRECTOTCORR']
+    # Rename the columns to 'RH2M', 'T2M', 'PRECT'
+    df.columns = ['RH2M', 'T2M', 'PRECTOT']
 
     # Reset the index to bring dates back as a column
     df = df.reset_index()
@@ -120,15 +120,83 @@ for region in producers.Region:
 df_curr = pd.read_csv("./COCOA/PN_data/power_nasa_Esmeraldas_Ecuador.csv",
                  index_col='date')
 
-# Plot the data using Plotly
-fig = px.line(df, x='date', y='value', color='variable',
-              labels={'date': 'Date', 'value': 'Value', 'variable': 'Variables'},
-              title='Weather Data (Temperature, Precipitation, Humidity)')
+import pandas as pd
+import os
+
+# Assuming df1 is already defined and loaded
+# Initialize an empty list to collect DataFrames
+precipitation_dfs = []
+
+for _, row in producers.iterrows():
+    region = row['Region']
+    country = row['Country']
+    area = row['Area (Mha) %']
+
+    # Build the filename based on the pattern
+    file_path = f"./COCOA/PN_data/power_nasa_{region}_{country}.csv"
+
+    # Check if the file exists
+    if os.path.exists(file_path):
+        # Read the file and parse the date column if needed
+        df = pd.read_csv(file_path)
+
+        # Add metadata to track origin
+        df['Region'] = region
+        df['Country'] = country
+        df['area_mha_perc'] = str(area)
+
+        # Keep only the relevant columns
+        if 'PRECTOT' in df.columns:
+            df_precip = df[['PRECTOT']].copy()
+            df_precip['date'] = df.index if df.index.name else df.get('date', None)
+            df_precip['Region'] = region
+            df_precip['Country'] = country
+            df_precip['area_mha_perc'] = area
+            precipitation_dfs.append(df_precip)
+        else:
+            print(f"PRECTOT not found in file: {file_path}")
+    else:
+        print(f"File not found: {file_path}")
+
+# Concatenate all precipitation dataframes
+precipitation_all = pd.concat(precipitation_dfs, ignore_index=True)
+
+# Optional: Pivot if you want Region-wise columns
+# precip_pivot = precipitation_all.pivot(index='Date', columns='Region', values='PRECTOT')
+
+# Assuming your DataFrame is called `df`
+# Ensure date is in datetime format
+df['date'] = pd.to_datetime(df['date'])
+
+# Convert PRECTOT and area_mha_perc to numeric, coercing errors
+df['PRECTOT'] = pd.to_numeric(df['PRECTOT'], errors='coerce')
+df['area_mha_perc'] = pd.to_numeric(df['area_mha_perc'], errors='coerce')
+
+# Drop rows with NaNs in these columns
+df = df.dropna(subset=['PRECTOT', 'area_mha_perc'])
+
+# Compute weighted average by date
+weighted_avg_df = (
+    df.groupby('date').apply(
+        lambda x: (x['PRECTOT'] * x['area_mha_perc']).sum() / x['area_mha_perc'].sum()
+    )
+).reset_index(name='PRECTOT_weighted_avg')
+
+import plotly.express as px
+
+# Assuming weighted_avg_df is already computed and has 'date' and 'PRECTOT_weighted_avg' columns
+fig = px.line(
+    weighted_avg_df,
+    x='date',
+    y='PRECTOT_weighted_avg',
+    title='Weighted Average of PRECTOT Over Time',
+    labels={'PRECTOT_weighted_avg': 'PRECTOT (mm/day)', 'date': 'Date'}
+)
 
 fig.update_layout(
     xaxis_title='Date',
-    yaxis_title='Value',
-    legend_title='Variables'
+    yaxis_title='Weighted PRECTOT',
+    template='plotly_white'
 )
 
 fig.show()
