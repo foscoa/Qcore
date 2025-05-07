@@ -9,7 +9,7 @@ import pytz
 ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05062025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05072025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -278,7 +278,7 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 nans_lastPX_Ids = {
                     777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
-                    # 230949979 : 515.65,
+                    781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
                     120550477: portfolio_df[portfolio_df.ConID == 120550477]['Market Price'].values[0], # BKR B
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
@@ -288,7 +288,8 @@ contracts_quoted_USd = {526262864: 100,
                         577421489: 100,
                         532513438: 100,
                         573366572: 100,
-                        577421502:  100, # CT
+                        703249626: 100, # HEV5
+                        577421502: 100, # CT
                         725809839: 100, # Feeder Cattle
                         577421487: 100  # Coffee "C"
 }
