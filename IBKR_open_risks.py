@@ -9,7 +9,7 @@ import pytz
 ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05072025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05082025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -280,6 +280,7 @@ nans_lastPX_Ids = {
                     777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
                     781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
                     120550477: portfolio_df[portfolio_df.ConID == 120550477]['Market Price'].values[0], # BKR B
+                    780326845: portfolio_df[portfolio_df.ConID == 780326845]['Market Price'].values[0], # Gold cert
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -492,7 +493,7 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  672770480, # kiwi
+                  # 672770480, # kiwi
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
