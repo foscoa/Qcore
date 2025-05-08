@@ -6,11 +6,16 @@ import numpy as np
     Returns a cleaned and aggregated DataFrame.
     """
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05052025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05082025.csv"
+nav_path = "Q_Pareto_Transaction_History_DEV/Data/NAV_in_base_FA.csv"
 
-# Read the CSV file
+# Read transaction history CSV file
 df = pd.read_csv(file_path)
 df.columns = df.columns.str.replace("/", "_", regex=False)
+
+# Read transaction history CSV file
+df_nav = pd.read_csv(nav_path)
+df_nav.columns = df_nav.columns.str.replace("/", "_", regex=False)
 
 # Filter for execution-level trades that are either "Open" or "Close"
 trade_df = df.query('LevelOfDetail == "EXECUTION" & Open_CloseIndicator in ["C", "O"]').copy()
@@ -169,5 +174,25 @@ def format_duration(duration):
 
 
 aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuration'].apply(format_duration)
+
+aggregated_positions_df_new = aggregated_positions_df.copy()
+
+# add PnL in basis points
+df_nav["ReportDate"] = pd.to_datetime(df_nav["ReportDate"], format="%Y%m%d")
+
+# Truncate time from FirstEntryDate to keep only the date part
+aggregated_positions_df_new["EntryDate_D"] = aggregated_positions_df_new["FirstEntryDate"].dt.floor("D")
+
+# Step 2: Merge the dataframes on the date
+aggregated_positions_df_new = aggregated_positions_df_new.merge(
+    df_nav[["ReportDate", "Total"]],
+    left_on="EntryDate_D",
+    right_on="ReportDate",
+    how="left"
+)
+
+aggregated_positions_df_new['FifoPnlRealizedToBaseBps'] = (aggregated_positions_df_new.FifoPnlRealizedToBase / aggregated_positions_df_new.Total)*10000
+
+
 aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv")
 aggregated_positions_df.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/transaction_history/aggregated_transaction_history.csv")

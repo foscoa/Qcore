@@ -106,6 +106,7 @@ AMTn,American Tower Corp,Equity
 AMZNn,Amazon Inc,Equity
 ARKK,ARK Innovation ETF,Eqty Idx
 AVGOn,Broadcom Inc,Equity
+AUDUSD,Call Turbo-Option on AUDUSD,Forex
 BAYNd,Bayer AG,Equity
 BABA,ALIBABA Group ADR,Equity
 BMWd,BMW,Equity
@@ -114,6 +115,7 @@ BTCM3,CME CF Bitcoin,Crypto
 CCL,Carnival Corp,Equity
 CCU3,Cocoa NYBOT,Comdty
 CCZ4,Cocoa NYBOT,Comdty
+CC,Cocoa NYBOT,Comdty
 CH4,Cocoa ICE,Comdty
 CLH4,Light Sweet Crude Oil,Comdty
 CLJ4,Light Sweet Crude Oil,Comdty
@@ -290,6 +292,9 @@ USD.CAD,USD.CAD,Forex
 USD.CNH,USD.CNH,Forex
 VNQ,Vanguard Real Estate ETF,Equity
 VOW3d,Volkswagen,Equity
+VK1XMM,AUDUSD,Forex
+SAP,Call Turbo-Option on SAP,Equity
+XAUUSD,Call Turbo-Option on Gold,Comdty
 WH4,White Sugar,Comdty
 WQ3,White Sugar,Comdty
 WV3,White Sugar,Comdty

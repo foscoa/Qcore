@@ -13,6 +13,7 @@ import plotly.graph_objects as go
 # Define the file path
 file_path_transaction_history = "Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv"
 file_path_transaction_history_AMC = 'Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC.csv'
+file_path_NAV = 'Q_Pareto_Transaction_History_DEV/Data/NAV_in_base_FA.csv'
 file_path_open_risks = "Q_Pareto_Transaction_History_DEV/Data/open_risks.csv"
 asst_path = os.path.dirname(os.path.abspath(__name__)) + '/Q_Pareto_Transaction_History_DEV/assets/'
 file_path_corr_matrix= "Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv"
@@ -103,6 +104,30 @@ def get_journal_data(file_path_transaction_history):
     # merge with AMC data
     aggregated_positions_df = pd.concat([aggregated_positions_df, aggregated_positions_df_AMC], axis=0, ignore_index=True)
 
+    # Read transaction history CSV file
+    df_nav = pd.read_csv(file_path_NAV)
+    df_nav.columns = df_nav.columns.str.replace("/", "_", regex=False)
+
+    # add PnL in basis points
+    df_nav["ReportDate"] = pd.to_datetime(df_nav["ReportDate"], format="%Y%m%d")
+
+    # Truncate time from FirstEntryDate to keep only the date part
+    aggregated_positions_df["FirstEntryDate"] = pd.to_datetime(aggregated_positions_df["FirstEntryDate"],
+                                                               errors='coerce')
+
+    aggregated_positions_df["EntryDate_D"] = aggregated_positions_df["FirstEntryDate"].dt.floor("D")
+
+    # Step 2: Merge the dataframes on the date
+    aggregated_positions_df = aggregated_positions_df.merge(
+        df_nav[["ReportDate", "Total"]],
+        left_on="EntryDate_D",
+        right_on="ReportDate",
+        how="left"
+    )
+
+    aggregated_positions_df['FifoPnlRealizedToBaseBps'] = (aggregated_positions_df.FifoPnlRealizedToBase / aggregated_positions_df.Total) * 10000
+
+
     # Rename columns for clarity
     aggregated_positions_df.rename(columns={
         'CurrencyPrimary': 'CCY',
@@ -113,10 +138,13 @@ def get_journal_data(file_path_transaction_history):
         'NotionalToBase': 'Notional(EUR)',
         'FirstEntryDate': 'First Entry Date',
         'LastExitDate': 'Last Exit Date',
-        'AvgClosePrice': 'Close Price (wAvg)',
-        'AvgOpenPrice': 'Open Price (wAvg)',
+        'AvgClosePrice': 'ExitPrice(wAvg)',
+        'AvgOpenPrice': 'EntryPrice(wAvg)',
         'TradeDuration': 'Trade Duration',
         'AssetClass': 'Asset Class',
+        'Total': 'NAV at Entry',
+        'FifoPnlRealizedToBaseBps': 'Real.PnL(bps)',
+        'Multiplier': 'Mult.',
 
 
     }, inplace=True)
@@ -135,13 +163,15 @@ def get_journal_data(file_path_transaction_history):
         "Quantity",
         "Notional(EUR)",
         "Real.PnL(EUR)",
-        "Open Price (wAvg)",
-        "Close Price (wAvg)",
+        "Real.PnL(bps)",
+        "EntryPrice(wAvg)",
+        "ExitPrice(wAvg)",
         # "Open_CloseIndicator",
-        "Multiplier",
+        "Mult.",
         "Instr.",
         "Symbol",
         "Exchange",
+        "NAV at Entry",
         # "IBOrderID",
         "Seconds",
         "Conid"
@@ -153,18 +183,18 @@ def get_journal_data(file_path_transaction_history):
 def plot_return_distribution(trans_hist):
     # Plot
     # Set fixed bin width to 1.5k EUR
-    bin_width = 1500
+    bin_width = 5
 
     # Calculate bin range
-    x_min = trans_hist['Real.PnL(EUR)'].min()
-    x_max = trans_hist['Real.PnL(EUR)'].max()
+    x_min = trans_hist['Real.PnL(bps)'].min()
+    x_max = trans_hist['Real.PnL(bps)'].max()
 
     start = bin_width * np.floor(x_min / bin_width)
     end = bin_width * np.ceil(x_max / bin_width)
 
     # Split data by sign
-    neg_values = trans_hist[trans_hist['Real.PnL(EUR)'] < 0]['Real.PnL(EUR)']
-    pos_values = trans_hist[trans_hist['Real.PnL(EUR)'] >= 0]['Real.PnL(EUR)']
+    neg_values = trans_hist[trans_hist['Real.PnL(bps)'] < 0]['Real.PnL(bps)']
+    pos_values = trans_hist[trans_hist['Real.PnL(bps)'] >= 0]['Real.PnL(bps)']
 
     # Create figure
     fig = go.Figure()
@@ -190,12 +220,12 @@ def plot_return_distribution(trans_hist):
     )),
 
     # KDE curve
-    kde = gaussian_kde(trans_hist['Real.PnL(EUR)'])
+    kde = gaussian_kde(trans_hist['Real.PnL(bps)'])
     x_vals = np.linspace(start, end, 500)
     y_vals = kde(x_vals)
 
     # Scale KDE to match histogram height (rough approximation)
-    hist_counts, _ = np.histogram(trans_hist['Real.PnL(EUR)'], bins=np.arange(start, end + bin_width, bin_width))
+    hist_counts, _ = np.histogram(trans_hist['Real.PnL(bps)'], bins=np.arange(start, end + bin_width, bin_width))
     scale_factor = hist_counts.max() / y_vals.max()
     y_scaled = y_vals * scale_factor
 
@@ -222,7 +252,7 @@ def plot_return_distribution(trans_hist):
     # Layout settings
     fig.update_layout(
         title=dict(
-            text="PnL Distribution (EUR)",
+            text="PnL Distribution (bps)",
             x=0.0,
             font=dict(
                 size=15,  # You can adjust the font size
@@ -232,7 +262,7 @@ def plot_return_distribution(trans_hist):
             )
         ),
         barmode='overlay',
-        xaxis_title="PnL (EUR)",
+        xaxis_title="PnL (bps)",
         yaxis_title="Number of Trades",
         template="plotly_white",
         margin=dict(l=20, r=20, t=25, b=20),
@@ -302,7 +332,9 @@ def get_statistics():
                 "Number of Trades": "0",
                 "Win Rate": "0.00%",
                 "Avg Profit (EUR)": "0",
+                "Avg Profit (bps)": "0",
                 "Avg Loss (EUR)": "0",
+                "Avg Loss (bps)": "0",
                 "Ratio win/loss size": "N/A",
                 "% Profits Top 15%": "0.00%",
                 "Pareto Ratio": "0.00",
@@ -313,7 +345,9 @@ def get_statistics():
 
         win_rate = (df['Real.PnL(EUR)'] > 0).sum() / (df['Real.PnL(EUR)'] != 0).sum()
         avg_profit = df[df['Real.PnL(EUR)'] > 0]['Real.PnL(EUR)'].mean()
-        avg_loss = df[df['Real.PnL(EUR)'] <= 0]['Real.PnL(EUR)'].mean()
+        avg_profit_bps = round(df[df['Real.PnL(bps)'] > 0]['Real.PnL(bps)'].mean(), 2)
+        avg_loss = np.abs(df[df['Real.PnL(EUR)'] <= 0]['Real.PnL(EUR)'].mean())
+        avg_loss_bps = round(np.abs(df[df['Real.PnL(bps)'] <= 0]['Real.PnL(bps)'].mean()), 2)
 
         avg_duration_days = df['Seconds'].mean() / (60 * 60 * 24)
         avg_duration_days_str = f"{floor(avg_duration_days)}d{int((avg_duration_days - floor(avg_duration_days)) * 24)}h"
@@ -331,7 +365,9 @@ def get_statistics():
             "Number of Trades": str((df['Real.PnL(EUR)'] != 0).count()),
             "Win Rate": f"{round(win_rate * 100, 2)}%",
             "Avg Profit (EUR)": f"{int(avg_profit):,}".replace(",", "'") if not pd.isna(avg_profit) else "0",
+            "Avg Profit (bps)": str(avg_profit_bps),
             "Avg Loss (EUR)": f"{int(avg_loss):,}".replace(",", "'") if not pd.isna(avg_loss) else "0",
+            "Avg Loss (bps)": str(avg_loss_bps),
             "Ratio win/loss size": str(round(avg_profit / abs(avg_loss), 2)) if avg_loss != 0 else "N/A",
             "% Profits Top 15%": f"{round(top_15_percent * 100, 2)}%",
             "Pareto Ratio": str(round(top_15_percent / 0.85, 2)) if top_15_percent != 0 else "0",
@@ -586,11 +622,11 @@ def render_content(tab):
                 col["type"] = "numeric"
                 col["format"] = Format(sign=Sign.positive,precision=2, scheme=Scheme.decimal_integer,
                                        group_delimiter="'", group=Group.yes, groups=[3])
-            elif col["id"] == 'Open Price (wAvg)':
+            elif col["id"] == 'EntryPrice(wAvg)':
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.4~f')
 
-            elif col["id"] == 'Close Price (wAvg)':
+            elif col["id"] == 'ExitPrice(wAvg)':
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.4~f')
 
@@ -602,6 +638,13 @@ def render_content(tab):
                 col["type"] = "numeric"
                 col["format"] = Format(precision=2, scheme=Scheme.decimal_integer,
                                        group_delimiter="'", group=Group.yes, groups=[3])
+            elif col["id"] == 'NAV at Entry':
+                col["type"] = "numeric"
+                col["format"] = Format(precision=2, scheme=Scheme.decimal_integer,
+                                       group_delimiter="'", group=Group.yes, groups=[3])
+            elif col["id"] == 'Real.PnL(bps)':
+                col["type"] = "numeric"
+                col["format"] = dict(specifier='.0~f')
 
         return html.Div([
             dash_table.DataTable(
@@ -613,12 +656,12 @@ def render_content(tab):
                 style_data={'backgroundColor': '#ecf0f1', 'color': '#2c3e50'},
                 style_data_conditional=[
                 {
-                    'if': {'filter_query': '{Real.PnL(EUR)} < 0', 'column_id': 'Real.PnL(EUR)'},
+                    'if': {'filter_query': '{Real.PnL(bps)} < 0', 'column_id': 'Real.PnL(bps)'},
                     'backgroundColor': '#F7B7B7',
                     'color': 'black',
                 },
                 {
-                    'if': {'filter_query': '{Real.PnL(EUR)} >= 0', 'column_id': 'Real.PnL(EUR)'},
+                    'if': {'filter_query': '{Real.PnL(bps)} >= 0', 'column_id': 'Real.PnL(bps)'},
                     'backgroundColor': '#A8E6A1',
                     'color': 'black',
                 },
