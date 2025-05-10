@@ -16,49 +16,57 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
 
+flag_DWLD_futures = False
+flag_DWLD_power_nasa = False
 
-# Connect to IB Gateway or TWS
-ib = IB()
-ib.connect('127.0.0.1', 7496, clientId=1)  # Paper trading
+if flag_DWLD_futures:
+    # Define file path
+    file_path = "./futures_contract_specs.csv"  # Update with your file location
 
-# Define file path
-file_path = "./futures_contract_specs.csv"  # Update with your file location
+    # Read the CSV file
+    fut_specs = pd.read_csv(file_path).to_dict(orient='records')
 
-# Read the CSV file
-fut_specs = pd.read_csv(file_path).to_dict(orient='records')
+    # Create a contract for E-mini S&P 500 futures
 
-# Create a contract for E-mini S&P 500 futures
+    fut_dict = [i for i in fut_specs if i['symbol'] == 'CC'][0]
 
-fut_dict = [i for i in fut_specs if i['symbol'] == 'CC'][0]
+    # Convert date to string if needed
+    fut_dict['lastTradeDateOrContractMonth'] = str(fut_dict['lastTradeDateOrContractMonth'])
 
-# Convert date to string if needed
-fut_dict['lastTradeDateOrContractMonth'] = str(fut_dict['lastTradeDateOrContractMonth'])
+    # Create a general contract
+    contract = Contract(**fut_dict)
 
-# Create a general contract
-contract = Contract(**fut_dict)
+    # Helper function to get historical data
+    def get_data(contract):
+        # Connect to IB Gateway or TWS
+        ib = IB()
+        ib.connect('127.0.0.1', 7496, clientId=1)  # Paper trading
 
-# Helper function to get historical data
-def get_data(contract):
-    bars = ib.reqHistoricalData(
-        contract=contract,  # The contract object
-        endDateTime="",  # End time ("" = current time)
-        durationStr="2 Y",  # Duration (e.g., "1 D" = 1 day)
-        barSizeSetting="1 day",  # Granularity (e.g., "1 min", "5 mins")
-        whatToShow="TRADES",  # Data type: "TRADES", "BID", etc.
-        useRTH=1,  # Regular Trading Hours only
-        formatDate=1,  # Date format: 1 = human-readable, 2 = UNIX
-        keepUpToDate=False,  # Keep receiving live updates (False for static)
-        chartOptions=[]
-    )
+        bars = ib.reqHistoricalData(
+            contract=contract,  # The contract object
+            endDateTime="",  # End time ("" = current time)
+            durationStr="2 Y",  # Duration (e.g., "1 D" = 1 day)
+            barSizeSetting="1 day",  # Granularity (e.g., "1 min", "5 mins")
+            whatToShow="TRADES",  # Data type: "TRADES", "BID", etc.
+            useRTH=1,  # Regular Trading Hours only
+            formatDate=1,  # Date format: 1 = human-readable, 2 = UNIX
+            keepUpToDate=False,  # Keep receiving live updates (False for static)
+            chartOptions=[]
+        )
 
-    df = util.df(bars)
-    return df if not df.empty else None
+        df = util.df(bars)
 
-df_CCN5 = get_data(contract=contract)
-# Ensure 'date' is datetime in df_CCN5
+        ib.disconnect()
+
+        return df if not df.empty else None
+
+    df_CCN5= get_data(contract=contract)
+    # Ensure 'date' is datetime in df_CCN5
+
+    df_CCN5.to_csv("./COCOA/futures_data/CCN5.csv", index=False)
+
+df_CCN5 = pd.read_csv("./COCOA/futures_data/CCN5.csv")
 df_CCN5['date'] = pd.to_datetime(df_CCN5['date'])
-
-ib.disconnect()
 
 # Country producers
 producers = pd.read_csv("./COCOA/extended_cocoa_production_by_region.csv")
@@ -84,51 +92,51 @@ producers.reset_index(drop=True, inplace=True)
 
 # (Mha) area in millition hestares
 
+if flag_DWLD_power_nasa:
+    # download rain data
+    for region in producers.Region:
 
-# download rain data
-for region in producers.Region:
+        country = producers.query('Region == @region').Country.values[0]
+        log_string = "Downloading data for " + region + ", " + country + "...\n"
+        print(log_string)
 
-    country = producers.query('Region == @region').Country.values[0]
-    log_string = "Downloading data for " + region + ", " + country + "...\n"
-    print(log_string)
+        lat = producers.query('Region == @region').Latitude.values[0]
+        lon = producers.query('Region == @region').Longitude.values[0]
 
-    lat = producers.query('Region == @region').Latitude.values[0]
-    lon = producers.query('Region == @region').Longitude.values[0]
+        start = "20230101"
+        end = "20250430"
 
-    start = "20230101"
-    end = "20250430"
+        url = (
+            f"https://power.larc.nasa.gov/api/temporal/daily/point?"
+            f"parameters=T2M,PRECTOT,RH2M&community=AG&latitude={lat}&longitude={lon}"
+            f"&start={start}&end={end}&format=JSON"
+        )
 
-    url = (
-        f"https://power.larc.nasa.gov/api/temporal/daily/point?"
-        f"parameters=T2M,PRECTOT,RH2M&community=AG&latitude={lat}&longitude={lon}"
-        f"&start={start}&end={end}&format=JSON"
-    )
+        r = requests.get(url)
+        data = r.json()
 
-    r = requests.get(url)
-    data = r.json()
+        # Convert the data into a DataFrame
+        df = pd.DataFrame.from_dict(data['properties']['parameter'])
 
-    # Convert the data into a DataFrame
-    df = pd.DataFrame.from_dict(data['properties']['parameter'])
+        # Rename the columns to 'RH2M', 'T2M', 'PRECT'
+        df.columns = ['RH2M', 'T2M', 'PRECTOT']
 
-    # Rename the columns to 'RH2M', 'T2M', 'PRECT'
-    df.columns = ['RH2M', 'T2M', 'PRECTOT']
+        # Reset the index to bring dates back as a column
+        df = df.reset_index()
 
-    # Reset the index to bring dates back as a column
-    df = df.reset_index()
+        # Rename the index column to 'date'
+        df = df.rename(columns={"index": "date"})
 
-    # Rename the index column to 'date'
-    df = df.rename(columns={"index": "date"})
-
-    # Convert the date column to datetime format
-    df['date'] = pd.to_datetime(df['date'], format='%Y%m%d')
+        # Convert the date column to datetime format
+        df['date'] = pd.to_datetime(df['date'], format='%Y%m%d')
 
 
-    # Melt the DataFrame to long format
-   # df_long = df.melt(id_vars=["date"], value_vars=["T2M", "PRECTOTCORR", "RH2M"],
-   #                   var_name="variable", value_name="value")
-    file_name = "./COCOA/PN_data/" + "power_nasa_" + region + "_" + country + ".csv"
+        # Melt the DataFrame to long format
+       # df_long = df.melt(id_vars=["date"], value_vars=["T2M", "PRECTOTCORR", "RH2M"],
+       #                   var_name="variable", value_name="value")
+        file_name = "./COCOA/PN_data/" + "power_nasa_" + region + "_" + country + ".csv"
 
-    df.to_csv(file_name, index=False)
+        df.to_csv(file_name, index=False)
 
 
 
