@@ -127,6 +127,7 @@ def get_journal_data(file_path_transaction_history):
 
     aggregated_positions_df['FifoPnlRealizedToBaseBps'] = (aggregated_positions_df.FifoPnlRealizedToBase / aggregated_positions_df.Total) * 10000
 
+    aggregated_positions_df['Change(%)'] = ((aggregated_positions_df.AvgClosePrice/aggregated_positions_df.AvgOpenPrice)-1)*100
 
     # Rename columns for clarity
     aggregated_positions_df.rename(columns={
@@ -166,6 +167,7 @@ def get_journal_data(file_path_transaction_history):
         "Real.PnL(bps)",
         "EntryPrice(wAvg)",
         "ExitPrice(wAvg)",
+        "Change(%)",
         # "Open_CloseIndicator",
         "Mult.",
         "Instr.",
@@ -419,7 +421,7 @@ def render_content(tab):
         df = sample_data
 
         # sorting, first open orders
-        df = df.sort_values(by='Status', key=lambda x: x.map({'open':1, 'working':2}))
+        df = df.sort_values(by='maxL/minP (bps)', ascending=False)
 
         # Dynamically generate columns, but modify the Date column to include format
         columns = [{"name": i, "id": i} for i in df.columns]
@@ -540,12 +542,12 @@ def render_content(tab):
                     'backgroundColor': '#F7B7B7',
                 },
                 {
-                    'if': {'filter_query': '{Tot PnL (EUR)} < 0', 'column_id': 'Tot PnL (EUR)'},
+                    'if': {'filter_query': '{Tot PnL (bps)} < 0', 'column_id': 'Tot PnL (bps)'},
                     'backgroundColor': '#F7B7B7',
                     'color': 'black',
                 },
                 {
-                    'if': {'filter_query': '{Tot PnL (EUR)} > 0', 'column_id': 'Tot PnL (EUR)'},
+                    'if': {'filter_query': '{Tot PnL (bps)} > 0', 'column_id': 'Tot PnL (bps)'},
                     'backgroundColor': '#A8E6A1',
                     'color': 'black',
                 },
@@ -646,6 +648,11 @@ def render_content(tab):
                 col["type"] = "numeric"
                 col["format"] = dict(specifier='.0~f')
 
+            elif (col["id"] == 'Change(%)'):
+                col["type"] = "numeric"
+                col["format"] = dict(specifier='.2~f')
+
+
         return html.Div([
             dash_table.DataTable(
                 data=df.to_dict('records'),
@@ -671,6 +678,14 @@ def render_content(tab):
                 },
                 {
                     'if': {'filter_query': '{Position} = "SHORT"', 'column_id': 'Position'},
+                    'color': 'firebrick',
+                },
+                {
+                    'if': {'filter_query': '{Change(%)} >= 0', 'column_id': 'Change(%)'},
+                    'color': 'forestgreen',
+                },
+                {
+                    'if': {'filter_query': '{Change(%)} < 0', 'column_id': 'Change(%)'},
                     'color': 'firebrick',
                 },
                 # ASSET CLASS CONDITIONAL FORMATTING

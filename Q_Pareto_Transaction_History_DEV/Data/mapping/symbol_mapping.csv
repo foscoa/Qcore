@@ -192,6 +192,7 @@ HGZ4,Copper,Comdty
 HOQ3,Heating Oil,Comdty
 IZ3,3M EURIBOR Interest Rate,Rates
 I,3M EURIBOR Interest Rate,Rates
+ICLN,IShares Global Clean Energy,Eqty Idx
 IBBn,IShares Biotech ETF,Eqty Idx
 IYT,IShares US Transportation ETF,Eqty Idx
 JNJn,Johnson and Johnson,Equity
@@ -285,6 +286,7 @@ SLV,IShares Silver Trust,Comdty
 SQn,Block Inc,Equity
 TLTn,IShares 20Y+ Treasury,Rates
 TSLAn,Tesla Inc,Equity
+TSLA,Tesla Inc,Equity
 TWLOn,Twilio Inc,Equity
 UCU24,SGX USD Chinese Renminbi (CNH),Forex
 UGA,UNITED STATES GAS FUND,Comdty

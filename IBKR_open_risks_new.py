@@ -1,7 +1,7 @@
 from ib_insync import *
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 
 
@@ -279,7 +279,7 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 nans_lastPX_Ids = {
                     777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
                     781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
-                    120550477: portfolio_df[portfolio_df.ConID == 120550477]['Market Price'].values[0], # BKR B
+                    120550477: 512.38, # BKR B
                     780326845: portfolio_df[portfolio_df.ConID == 780326845]['Market Price'].values[0], # Gold cert
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
@@ -438,6 +438,8 @@ risk_df['Multiplier'] = risk_df.Multiplier.fillna(1)
 
 last_risk = pd.DataFrame(columns=[
         'Status',
+        'Entry Date',
+        'Days Open',
         'Currency',
         'FX',
         'Symbol',
@@ -527,6 +529,7 @@ for conid in risk_df['ConID'].unique():
 
             rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0] / fx
 
+            # position was already open
             if conid in open_rzld_pnl.Conid.unique():
 
                 conid_rlzd_pnl = open_rzld_pnl.query('Conid == @conid')
@@ -536,6 +539,18 @@ for conid in risk_df['ConID'].unique():
                 else:
                     last_exec = -1
                 rlzd_PnL += conid_rlzd_pnl.FifoPnlRealizedToBase.iloc[(last_exec+1):].sum()
+
+                # log entry date
+                entry_date = conid_rlzd_pnl.DateTime_clean.min()
+                open_since = np.abs((conid_rlzd_pnl.DateTime_clean.min() - datetime.today()).days)
+            else:
+                entry_date = datetime.now(timezone.utc)
+                for fill in orders_df.query('ConID == @conid').Fills.values[0]:
+                    if entry_date > fill.execution.time:
+                        entry_date = fill.execution.time
+                entry_date = pd.Timestamp(entry_date.astimezone(pytz.timezone("Europe/Zurich")))
+                open_since = (datetime.now(pytz.timezone('Europe/Zurich')) - entry_date).days
+
 
             unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] / fx
 
@@ -572,6 +587,8 @@ for conid in risk_df['ConID'].unique():
 
             new_row = pd.DataFrame(data={
                 'Status': [position_status],
+                'Entry Date': [entry_date],
+                'Days Open': [open_since],
                 'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
                 'FX': [fx],  # Scalar wrapped in list
                 'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
@@ -604,6 +621,8 @@ for conid in risk_df['ConID'].unique():
             exposure = np.nan
             rlzd_PnL = np.nan
             unrlzd_PnL = np.nan
+            entry_date = np.nan
+            open_since = np.nan
 
             groups = {k: v for k, v in sub_df.groupby('Quantity')}
 
@@ -648,6 +667,8 @@ for conid in risk_df['ConID'].unique():
 
                     new_row = pd.DataFrame(data={
                         'Status': [position_status],
+                        'Entry Date': [entry_date],
+                        'Days Open': [open_since],
                         'Currency': [stops.Currency.unique()[0]],  # Make sure it's a list
                         'FX': [fx],  # Scalar wrapped in list
                         'Symbol': [stops.Symbol.unique()[0]],  # Make sure it's a list
@@ -700,9 +721,13 @@ for conid in risk_df['ConID'].unique():
             position = 'CLOSED'
             risk = np.nan
             string_stops = np.nan
+            entry_date = np.nan
+            open_since = np.nan
 
             new_row = pd.DataFrame(data={
                 'Status': [position_status],
+                'Entry Date': [entry_date],
+                'Days Open': [open_since],
                 'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
                 'FX': [fx],  # Scalar wrapped in list
                 'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
@@ -740,12 +765,12 @@ last_risk['maxL/minP (EUR)'] = np.where(last_risk["Status"] != 'working',
 last_risk['maxL/minP (bps)'] = (last_risk['maxL/minP (EUR)']/NLV)*10000
 
 
-last_risk = last_risk[['Status', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Name',
+last_risk = last_risk[['Status', 'Days Open', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Name',
        'Asset Class', 'Position', 'Contracts', 'Risk (EUR)', 'Risk (bps)','maxL/minP (EUR)', 'maxL/minP (bps)',
        'Rlzd PnL (EUR)', 'Rlzd PnL (bps)', 'UnRlzdPnL(EUR)', 'UnRlzdPnL(bps)',
        'Tot PnL (EUR)', 'Tot PnL (bps)', 'Exposure (EUR)', 'Expos. (%)',
        'Stop or Trigger', 'ATR 30D', 'ATR 30D (%)', 'multiplier', 'Last Price',
-       'ConID', 'NLV', 'Report Time']]
+       'ConID', 'Entry Date', 'NLV', 'Report Time']]
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
 last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
