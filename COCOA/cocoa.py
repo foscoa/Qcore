@@ -138,8 +138,6 @@ if flag_DWLD_power_nasa:
 
         df.to_csv(file_name, index=False)
 
-
-
 # Initialize an empty list to collect DataFrames
 precipitation_dfs = []
 temperature_dfs = []
@@ -254,7 +252,7 @@ class CocoaFeatureEngineer(BaseEstimator, TransformerMixin):
         # --- Interaction Terms ---
         df['temp_precip_interaction'] = df['T2M'] * df['PRECTOT']
         df['rolling_volatility_interaction'] = (
-                df['T2M'].rolling(7).std() * df['PRECTOT'].rolling(7).std()
+            df['T2M'].rolling(7).std() * df['PRECTOT'].rolling(7).std()
         )
 
         # --- Market Features ---
@@ -264,9 +262,55 @@ class CocoaFeatureEngineer(BaseEstimator, TransformerMixin):
             df['log_volume'] = np.log1p(df['volume'])
             df['avg_volume_7'] = df['volume'].rolling(7).mean()
 
+        # --- Agronomic Threshold Features ---
+        df['rain_30d_sum'] = df['PRECTOT'].rolling(30).sum()
+        df['rain_90d_sum'] = df['PRECTOT'].rolling(90).sum()
+        df['rain_30d_days_below_5mm'] = (df['PRECTOT'] < 5).rolling(30).sum()
+        df['heat_days_above_32C'] = (df['T2M'] > 32).rolling(30).sum()
+
+        df['drought_flag'] = (df['rain_30d_sum'] < 100).astype(int)
+        df['waterlogging_risk'] = (df['rain_30d_sum'] > 400).astype(int)
+        df['heat_stress_flag'] = (df['heat_days_above_32C'] >= 5).astype(int)
+        df['dry_spell_flag'] = (df['rain_30d_days_below_5mm'] > 10).astype(int)
+
+        # --- Lagged Agronomic Flags ---
+        df['drought_flag_lag60'] = df['drought_flag'].shift(60)
+        df['heat_stress_flag_lag60'] = df['heat_stress_flag'].shift(60)
+        df['rain_3mo_lag'] = df['rain_90d_sum'].shift(90)
+
+        # --- Future Return and Direction Target ---
+        df['future_return_3d'] = df['close'].shift(-3) / df['close'] - 1
+        df['target_direction_3d'] = (df['future_return_3d'] > 0).astype(int)
+        df['target_signal_3d'] = np.where(df['future_return_3d'] > 0.01, 1,
+                                          np.where(df['future_return_3d'] < -0.01, -1, 0))
+
         # --- Drop early rows with NaNs from rolling/lags ---
         df = df.dropna().reset_index(drop=True)
         return df
+
+def evaluate_directional_model(y_true, y_pred, probs=None, returns=None):
+    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+    import matplotlib.pyplot as plt
+
+    print("Accuracy:", accuracy_score(y_true, y_pred))
+    print("\nClassification Report:\n", classification_report(y_true, y_pred))
+    print("\nConfusion Matrix:\n", confusion_matrix(y_true, y_pred))
+
+    if returns is not None:
+        strategy_returns = returns * np.sign(np.array(y_pred))
+        cum_returns = np.cumsum(strategy_returns)
+
+        plt.figure(figsize=(10, 4))
+        plt.plot(cum_returns, label='Strategy Cumulative Returns')
+        plt.axhline(0, color='grey', linestyle='--')
+        plt.title("Backtest: Strategy Performance")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        sharpe = strategy_returns.mean() / strategy_returns.std()
+        print(f"\nStrategy Sharpe Ratio: {sharpe:.2f}")
+
 
 # Initialize and apply the feature engineer
 fe = CocoaFeatureEngineer()
@@ -322,6 +366,20 @@ model_pipeline.fit(X, y)
 latest_X = X.iloc[[-1]]
 predicted_next_close = model_pipeline.predict(latest_X)
 print("Predicted next-day close:", predicted_next_close[0])
+
+
+# Access the trained Ridge model and the scaler
+ridge_model = model_pipeline.named_steps['regressor']
+scaler = model_pipeline.named_steps['scaler']
+
+# Get the coefficients and match to feature names
+coefs = pd.Series(ridge_model.coef_, index=X.columns)
+
+# Sort by absolute value for importance
+important_features = coefs.abs().sort_values(ascending=False)
+
+print("\nMost important regressors (by absolute value):")
+print(important_features)
 
 def backtest_model(model_pipeline, X, y, n_splits=5, min_train_size=100):
     n_samples = len(X)
