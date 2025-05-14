@@ -1,0 +1,5 @@
+﻿symbol,secType,exchange,currency,lastTradeDateOrContractMonth,strike,multiplier
+CC,FUT,NYBOT,USD,202505,0,10
+CC,FUT,NYBOT,USD,202305,0,10
+
+

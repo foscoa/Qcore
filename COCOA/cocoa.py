@@ -14,14 +14,16 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
+from datetime import datetime, timedelta
 
+import time
 
 flag_DWLD_futures = False
 flag_DWLD_power_nasa = False
 
 if flag_DWLD_futures:
     # Define file path
-    file_path = "./futures_contract_specs.csv"  # Update with your file location
+    file_path = "./COCOA/futures_contract_specs.csv"  # Update with your file location
 
     # Read the CSV file
     fut_specs = pd.read_csv(file_path).to_dict(orient='records')
@@ -35,6 +37,66 @@ if flag_DWLD_futures:
 
     # Create a general contract
     contract = Contract(**fut_dict)
+
+    # Set time range
+    start_date = datetime(2023, 6, 1)
+    end_date = datetime.today()
+    delta = timedelta(days=7)
+
+    # Collect data in chunks
+    all_bars = []
+
+    current_end = end_date
+    while current_end > start_date:
+        current_start = current_end - delta
+        print(f"Requesting: {current_start} to {current_end}")
+
+        bars = ib.reqHistoricalData(
+            contract,
+            endDateTime=current_end.strftime('%Y%m%d %H:%M:%S'),
+            durationStr='7 D',
+            barSizeSetting='1 min',
+            whatToShow='TRADES',
+            useRTH=False,
+            formatDate=1,
+            keepUpToDate=False
+        )
+
+        if not bars:
+            print("No data for this window. Possibly before contract was active.")
+        else:
+            all_bars.extend(bars)
+
+        current_end = current_start
+        time.sleep(1.5)  # Avoid pacing violations
+
+    # Convert to DataFrame
+    df = util.df(all_bars)
+    df = df.drop_duplicates(subset=['date']).sort_values(by='date')
+
+    # Save to CSV
+    df.to_csv('./COCOA/CCK5_minute_data.csv', index=False)
+    print(f"Saved {len(df)} minute bars to cocoa_minute_data.csv")
+
+    # Ensure 'date' is datetime and set as index
+    df['date'] = pd.to_datetime(df['date'])
+    df.set_index('date', inplace=True)
+
+    # Resample to 15-minute intervals
+    df_15min = df.resample('15min').agg({
+        'open': 'first',
+        'high': 'max',
+        'low': 'min',
+        'close': 'last',
+        'volume': 'sum'  # If volume is present
+    })
+
+    # Drop rows with no data (e.g. during non-trading hours)
+    df_15min.dropna(subset=['open', 'high', 'low', 'close'], inplace=True)
+
+    # Reset index if needed
+    df_15min = df_15min.reset_index()
+
 
     # Helper function to get historical data
     def get_data(contract):
@@ -51,7 +113,7 @@ if flag_DWLD_futures:
             useRTH=1,  # Regular Trading Hours only
             formatDate=1,  # Date format: 1 = human-readable, 2 = UNIX
             keepUpToDate=False,  # Keep receiving live updates (False for static)
-            chartOptions=[]
+            chartOptions=[],
         )
 
         df = util.df(bars)
@@ -234,8 +296,6 @@ class CocoaFeatureEngineer(BaseEstimator, TransformerMixin):
 
         # --- Lag Features ---
         for lag in self.lag_days:
-            df[f'T2M_lag{lag}'] = df['T2M'].shift(lag)
-            df[f'PRECTOT_lag{lag}'] = df['PRECTOT'].shift(lag)
             df[f'close_lag{lag}'] = df['close'].shift(lag)
 
         # --- Rolling Statistics ---
@@ -247,7 +307,6 @@ class CocoaFeatureEngineer(BaseEstimator, TransformerMixin):
         # --- Differences ---
         df['delta_T2M'] = df['T2M'].diff()
         df['delta_PRECTOT'] = df['PRECTOT'].diff()
-        df['delta_close'] = df['close'].diff()
 
         # --- Interaction Terms ---
         df['temp_precip_interaction'] = df['T2M'] * df['PRECTOT']
@@ -259,7 +318,6 @@ class CocoaFeatureEngineer(BaseEstimator, TransformerMixin):
         if all(x in df.columns for x in ['open', 'high', 'low', 'volume']):
             df['intraday_range'] = df['high'] - df['low']
             df['gap'] = df['open'] - df['close'].shift(1)
-            df['log_volume'] = np.log1p(df['volume'])
             df['avg_volume_7'] = df['volume'].rolling(7).mean()
 
         # --- Agronomic Threshold Features ---
