@@ -1,3 +1,4 @@
+import numpy as np
 from ib_insync import *
 import pandas as pd
 
@@ -7,19 +8,35 @@ ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 # Fetch open positions
 positions = ib.positions()
-positions_df = pd.DataFrame([
-    {
-        'ConID': pos.contract.conId,
-        'Symbol': pos.contract.symbol,
-        'Local Symbol': pos.contract.localSymbol,
-        'SecType': pos.contract.secType,
-        'Exchange': pos.contract.exchange,
-        'Currency': pos.contract.currency,
-        'Multiplier': pos.contract.multiplier if hasattr(pos.contract, 'multiplier') else 1,
+positions_data = []
+
+for pos in positions:
+    contract = pos.contract
+    details = ib.reqContractDetails(contract)
+
+    if details:
+        detail = details[0]
+        long_name = detail.longName
+        sec_id = detail.secIdList[0].value if detail.secIdList else "N/A"
+    else:
+        long_name = np.nan
+        sec_id = np.nan
+
+    positions_data.append({
+        'ConID': contract.conId,
+        'Symbol': contract.symbol,
+        'Local Symbol': contract.localSymbol,
+        'SecType': contract.secType,
+        'Exchange': contract.exchange,
+        'Name': long_name,
+        'SecID': sec_id,
+        'Currency': contract.currency,
+        # 'Multiplier': contract.multiplier if hasattr(contract, 'multiplier') else 1,
         'Position': pos.position,
-        'Avg Cost': pos.avgCost
-    } for pos in positions
-])
+        # 'Avg Cost': pos.avgCost
+    })
+
+positions_df = pd.DataFrame(positions_data)
 
 # Request all open orders (manual + API)
 ib.reqAllOpenOrders()
@@ -45,3 +62,11 @@ orders_df = pd.DataFrame([
         'Fills': trade.fills
     } for trade in trades if trade.order  # Ensure order exists
 ])
+
+# delete filled and cancelled orders
+orders_df = orders_df[~orders_df['Status'].isin(['Filled', 'Cancelled'])]
+
+# remove CASH and WAR
+positions_df = positions_df[~positions_df['SecType'].isin(['CASH', 'WAR'])]
+
+

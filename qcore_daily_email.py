@@ -6,10 +6,10 @@ import pandas as pd
 
 import win32com.client as win32
 
-daily_PnL = +345  # EUR, from IBKR
+daily_PnL = +46027  # EUR, from IBKR
 
-est_MTD = -0.37     # previous day, % from Paul's daily estimate
-est_YTD = -2.25     # previous day, % from Paul's daily estimate
+est_MTD = -0.40     # previous day, % from Paul's daily estimate
+est_YTD = -2.36     # previous day, % from Paul's daily estimate
 
 today = datetime.today().strftime('%d %B %Y')
 
@@ -52,7 +52,7 @@ def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
         "Jan": "-0.98%",
         "Feb": "-1.56%",
         "Mar": "+0.81%",
-        "Apr": "-0.16%*",
+        "Apr": "-0.23%*",
         "May": curr_MTD + "*",
         "Jun": "",
         "Jul": "",

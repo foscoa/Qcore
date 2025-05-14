@@ -9,7 +9,7 @@ import pytz
 ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05092025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05122025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -279,8 +279,11 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 nans_lastPX_Ids = {
                     777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
                     781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
-                    120550477: 512.38, # BKR B
+                    52170893: portfolio_df[portfolio_df.ConID == 52170893]['Market Price'].values[0], # ICLN
                     780326845: portfolio_df[portfolio_df.ConID == 780326845]['Market Price'].values[0], # Gold cert
+                    76792991: portfolio_df[portfolio_df.ConID == 76792991]['Market Price'].values[0], # TSLA
+                    # 703249626: portfolio_df[portfolio_df.ConID == 703249626]['Market Price'].values[0]*100, #HE
+                    # 725809839: portfolio_df[portfolio_df.ConID == 725809839]['Market Price'].values[0]*100
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -289,10 +292,16 @@ contracts_quoted_USd = {526262864: 100,
                         577421489: 100,
                         532513438: 100,
                         573366572: 100,
+                        606234321: 100, # Dec CT
                         703249626: 100, # HEV5
                         577421502: 100, # CT
+                        532513462: 100, #ZLZ5
                         725809839: 100, # Feeder Cattle
-                        577421487: 100  # Coffee "C"
+                        577421487: 100,  # Coffee "C"
+                        703249626: 100,
+                        725809839: 100,
+                        526262864: 100
+
 }
 
 # map CFDs conid with STK
@@ -495,7 +504,7 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  # 672770480, # kiwi
+                  526262864, # ZS
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
