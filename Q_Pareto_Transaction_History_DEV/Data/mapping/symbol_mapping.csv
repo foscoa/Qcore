@@ -74,6 +74,7 @@ RCN4,Robusta Coffee,Comdty
 169030018,Nikkei 225,Eqty Idx
 169060005,TOPIX (JPY),Eqty Idx
 169090005,TOPIX (JPY),Eqty Idx
+1211,BYD Co LTD,Equity
 6AH4,Australian dollar,Forex
 6AZ3,Australian dollar,Forex
 6AZ4,Australian dollar,Forex
@@ -195,6 +196,7 @@ I,3M EURIBOR Interest Rate,Rates
 ICLN,IShares Global Clean Energy,Eqty Idx
 IBBn,IShares Biotech ETF,Eqty Idx
 IYT,IShares US Transportation ETF,Eqty Idx
+INDU,Call Turbo-Opt. on Dow Jones,Eqty Idx
 JNJn,Johnson and Johnson,Equity
 KCK4,Coffee C,Comdty
 KCN4,Coffee C,Comdty
@@ -228,6 +230,7 @@ MNQM4,Micro E-mini NASDAQ 100,Eqty Idx
 MNQU4,Micro E-mini NASDAQ 100,Eqty Idx
 MNQZ3,Micro E-mini NASDAQ 100,Eqty Idx
 MNQZ4,Micro E-mini NASDAQ 100,Eqty Idx
+MUV2,Call Turbo-Option on Munich Re,Equity
 NQ,Micro E-mini NASDAQ 100,Eqty Idx
 MSFTn,Microsoft,Equity
 MYMZ4,Micro E-mini Dow Jones,Eqty Idx

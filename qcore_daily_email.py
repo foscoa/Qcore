@@ -6,10 +6,10 @@ import pandas as pd
 
 import win32com.client as win32
 
-daily_PnL = +46027  # EUR, from IBKR
+daily_PnL = +36970  # EUR, from IBKR
 
-est_MTD = -0.40     # previous day, % from Paul's daily estimate
-est_YTD = -2.36     # previous day, % from Paul's daily estimate
+est_MTD = +1.56     # previous day, % from Paul's daily estimate
+est_YTD = -0.44     # previous day, % from Paul's daily estimate
 
 today = datetime.today().strftime('%d %B %Y')
 
@@ -52,7 +52,7 @@ def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
         "Jan": "-0.98%",
         "Feb": "-1.56%",
         "Mar": "+0.81%",
-        "Apr": "-0.23%*",
+        "Apr": "-0.24%",
         "May": curr_MTD + "*",
         "Jun": "",
         "Jul": "",
@@ -225,7 +225,7 @@ def send_outlook_email(subject, html_body, recipients):
     mail.To = recipients  # Example: "example@example.com;another@example.com"
 
     # Set the sender's email (optional, defaults to your Outlook account)
-    mail.Sender = "fa@qcore.group"  # Optional: Can be used when sending on behalf of someone else
+    mail.Sender = "fosco.antognini@qcore.ch"  # Optional: Can be used when sending on behalf of someone else
 
     mail.BodyFormat = 2  # 2 = HTML
     mail.HTMLBody = html_body
@@ -239,7 +239,8 @@ if __name__ == "__main__":
     body = generate_full_email_body()
 
     subject = "📈 Q-PT Report - " + today + " | Daily PnL: " + f"{daily_PnL/NLV:+.2%}" + "*"
-    recipients = "fosco.antognini@qcore.ch"  # <--- put real emails separated by ;
+    # recipients = "fosco.antognini@qcore.ch"  # <--- put real emails separated by ;
+    recipients = "rr@qcore.group>;jw@qcore.group>;sven.schmidt@qcore.group>;pc@qcore.group>;sunanda.thiyagarajah@qcore.fund>;norman.hartmann@qcore.fund>"
 
     send_outlook_email(subject, body, recipients)
     print("Email sent successfully!")
