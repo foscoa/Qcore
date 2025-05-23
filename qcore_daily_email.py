@@ -1,15 +1,16 @@
 import win32com.client
 from datetime import datetime
-
 import win32com.client as win32
 import pandas as pd
-
 import win32com.client as win32
 
-daily_PnL = +36970  # EUR, from IBKR
+#### TO MODIFY #########################################################################################################
 
-est_MTD = +1.56     # previous day, % from Paul's daily estimate
-est_YTD = -0.44     # previous day, % from Paul's daily estimate
+daily_PnL = -16106  # EUR, from IBKR
+est_MTD = +2.52     # previous day, % from Paul's daily estimate
+est_YTD = +0.51     # previous day, % from Paul's daily estimate
+
+########################################################################################################################
 
 today = datetime.today().strftime('%d %B %Y')
 
@@ -225,7 +226,7 @@ def send_outlook_email(subject, html_body, recipients):
     mail.To = recipients  # Example: "example@example.com;another@example.com"
 
     # Set the sender's email (optional, defaults to your Outlook account)
-    mail.Sender = "fosco.antognini@qcore.ch"  # Optional: Can be used when sending on behalf of someone else
+    # mail.Sender = "fosco.antognini@qcore.ch"  # Optional: Can be used when sending on behalf of someone else
 
     mail.BodyFormat = 2  # 2 = HTML
     mail.HTMLBody = html_body

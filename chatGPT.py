@@ -20,12 +20,19 @@ while count < min(len(news), 20):
 
     url = article['title']
 
-    promt =  (
-        f"Forget all your previous instructions. Pretend you are a financial expert. You are "
-        f"a financial expert with stock recommendation experience. Your task is to judge {ticker},"
-        f" Answer “YES” if good news, “NO” if bad news, 'UNKNOWN' if it is not clear based on the headline. Then"
-        f"elaborate with one short and concise sentence on the next line. Is this headline"
-        f"good or bad for the stock price of company name in the short term? Headline: {url}"
+    promt =  ('''You are a professional technical analyst. I will provide you with daily candlestick data including date, open, high, low, close, and volume. Analyze the data and identify key patterns, including:
+- Overall trend direction (uptrend, downtrend, sideways)
+- Notable candlestick patterns (e.g., doji, hammer, engulfing)
+- Support and resistance zones
+- Periods of high volatility or volume spikes
+- Any signs of trend reversals or continuations
+- Moving average behavior (if evident)
+
+Here is the data:
+[INSERT YOUR CSV OR DATAFRAME STRING HERE]
+
+Provide a detailed summary of your findings in plain English, using proper technical analysis terminology.'''
+
     )
 
     stream = client.chat.completions.create(

@@ -9,6 +9,10 @@ ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
 # === Fetch Open Positions ===
+
+from xml.etree import ElementTree
+
+
 positions = ib.positions()
 positions_data = []
 
@@ -17,15 +21,19 @@ for pos in positions:
     details = ib.reqContractDetails(contract)
     detail = details[0] if details else None
 
+
     positions_data.append({
         'ConID': contract.conId,
         'Symbol': contract.symbol,
         'Position': pos.position,
         'Local Symbol': contract.localSymbol,
         'SecType': contract.secType,
+        'TradingClass': contract.tradingClass,
         'Name': detail.longName if detail else np.nan,
         'SecID': detail.secIdList[0].value if detail and detail.secIdList else np.nan,
-        'Currency': contract.currency
+        'Currency': contract.currency,
+        'Expiry': contract.lastTradeDateOrContractMonth if hasattr(contract,
+                                                                   'lastTradeDateOrContractMonth') else np.nan,
     })
 
 positions_df = pd.DataFrame(positions_data)
@@ -104,6 +112,25 @@ for _, pos_row in positions_df.iterrows():
     else:
         contracts_with_stop.append(conid)
 
+# === Expiries ===
+
+# Step 1: Filter only valid expiry dates in YYYYMMDD format (8 digit strings)
+expiries = positions_df[positions_df['Expiry'].str.match(r'^\d{8}$', na=False)].copy()
+
+# Step 2: Convert 'Expiry' to datetime
+expiries['ExpiryDate'] = pd.to_datetime(expiries['Expiry'], format='%Y%m%d')
+
+# Step 3: Sort by expiry date
+expiries = expiries.sort_values(by='ExpiryDate')
+
+# Step 4: Add column for days to expiry
+today = pd.to_datetime(datetime.today().date())
+expiries['DaysToExpiry'] = (expiries['ExpiryDate'] - today).dt.days
+
+expiries = expiries[['DaysToExpiry','ExpiryDate','Symbol', 'Local Symbol','Name', 'Currency','SecType',
+        'Direction', 'Position']]
+
+
 # === Final Output ===
 contracts_without_stop_df = positions_df[positions_df['ConID'].isin(contracts_without_stop)].sort_values(by='SecType')
 contracts_without_stop_df.drop(['ConID'], axis=1, inplace=True)
@@ -177,6 +204,9 @@ def generate_html_table(df):
 # Generate HTML table for positions without stop-loss
 contracts_without_stop_html = generate_html_table(contracts_without_stop_df)
 
+# Generate HTML table for expiries
+expiries_html = generate_html_table(expiries)
+
 # Build grouped HTML tables by Symbol with inline styles
 grouped_tables_html = ""
 for symbol, group_df in contracts_with_stop_df.groupby("Symbol"):
@@ -198,6 +228,10 @@ html_body = f"""
 <h3>⚠️ Positions without matching Stop Loss Orders</h3>
 <p>The following positions do not have matching stop-loss orders in place:</p>
 {contracts_without_stop_html}
+
+<h3>⏳ Expiries</h3>
+<p>The following positions have an expiration day:</p>
+{expiries_html}
 
 <br><h3>✅ Positions with matching Stop Loss Orders</h3>
 {grouped_tables_html}
@@ -228,5 +262,5 @@ mail.To = 'fosco.antognini@qcore.ch; pc@qcore.group; nh@qcore.fund; sven.schmidt
 mail.Subject = title
 mail.HTMLBody = html_body
 
-#mail.Display()
-mail.Send()
+mail.Display()
+# mail.Send()

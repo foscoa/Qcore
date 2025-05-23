@@ -9,7 +9,7 @@ import pytz
 ib = IB()
 ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05162025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05232025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -229,8 +229,8 @@ symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symb
                              header=0,
                              index_col=0)
 
-risk_df['Name'] = risk_df.Symbol.map(symbol_mapping.name.to_dict())
-risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
+risk_df['Name'] = risk_df['Local Symbol'].map(symbol_mapping['name'].to_dict())
+risk_df['Asset Class'] = risk_df['Local Symbol'].map(symbol_mapping.assetClass.to_dict())
 
 def addBaseCCYfx(df, ccy):
     # Fetch FX conversion rates to base currency
@@ -281,11 +281,10 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 nans_lastPX_Ids = {
                     777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
                     781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
-                    #52170893: portfolio_df[portfolio_df.ConID == 52170893]['Market Price'].values[0], # ICLN
                     783792696: portfolio_df[portfolio_df.ConID == 783792696]['Market Price'].values[0], # Gold cert
                     780326845: 27.04,
+                    230947546:0.9375,
                     #76792991: portfolio_df[portfolio_df.ConID == 76792991]['Market Price'].values[0], # TSLA
-                    #703249626: portfolio_df[portfolio_df.ConID == 703249626]['Market Price'].values[0]*100, #HE
                     245092953: portfolio_df[portfolio_df.ConID == 245092953]['Market Price'].values[0], #BYD
                     777325382: portfolio_df[portfolio_df.ConID == 777325382]['Market Price'].values[0], #MUV2 cert
                     783797628: portfolio_df[portfolio_df.ConID == 783797628]['Market Price'].values[0], # INDUcert
@@ -305,7 +304,9 @@ contracts_quoted_USd = {526262864: 100,
                         577421487: 100,  # Coffee "C"
                         703249626: 100,
                         725809839: 100,
-                        526262864: 100
+                        526262864: 100,
+                        #642484880: 100
+
 }
 
 # map CFDs conid with STK
@@ -508,7 +509,7 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  # 526262864, # ZS
+                  # 642484880, # PL
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
@@ -516,8 +517,8 @@ for conid in risk_df['ConID'].unique():
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
 
         # open and working orders have the same quantity
-        if conid == 526262864:
-            permIDs = [165041664, 165041665]
+        if conid == 642484880:
+            permIDs = [1103816496, 1103816497]
             open_sub_df = sub_df.query('PermID not in @permIDs')
             working_sub_df = sub_df.query('PermID in @permIDs')
 
