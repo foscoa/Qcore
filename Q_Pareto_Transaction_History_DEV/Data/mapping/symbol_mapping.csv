@@ -63,6 +63,8 @@ MES,E-mini S&P500,Eqty Idx
 FLKTB,10-Y Korea Treasury Bond,Rates
 MBT,Micro Bitcoin,Crypto
 MBTK5,Micro Bitcoin,Crypto
+MBTM5,Micro Bitcoin,Crypto
+28812380,Micro Bitcoin,Crypto
 NZD,New Zealand dollar,Forex
 GBS,Euro Schatz (2Y Bond),Rates
 RTY,Russel 2000,Eqty Idx
@@ -302,6 +304,7 @@ SX86P,Stoxx 600 Real Estate,Eqty Idx
 FSTL 20250620 M,Stoxx 600 Real Estate,Eqty Idx
 SIEd,Siemens AG,Equity
 SIN3,Silver,Comdty
+SIU5,Silver,Comdty
 SIRU3,Indian Rupee,Forex
 SIZ3,Silver,Comdty
 SLV,IShares Silver Trust,Comdty

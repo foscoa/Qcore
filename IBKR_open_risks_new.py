@@ -1,4 +1,5 @@
-from ib_insync import *
+from ib_async import IB
+from ib_async.contract import Forex, Contract
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
@@ -7,9 +8,9 @@ import pytz
 
 # Connect to IBKR Gateway or TWS
 ib = IB()
-ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
+ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05232025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05302025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -25,7 +26,7 @@ def get_realized_PnL(file_path):
     clean_date = master_df.DateTime.str.replace(";", " ")
 
     # Convert to datetime in CET timezone
-    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format="%Y%m%d %H%M%S").dt.tz_localize(
+    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format='mixed', errors='coerce').dt.tz_localize(
         'America/New_York').dt.tz_convert('Europe/Berlin').dt.tz_localize(None)
 
     # Sort by Time
@@ -232,6 +233,8 @@ symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symb
 risk_df['Name'] = risk_df['Local Symbol'].map(symbol_mapping['name'].to_dict())
 risk_df['Asset Class'] = risk_df['Local Symbol'].map(symbol_mapping.assetClass.to_dict())
 
+
+
 def addBaseCCYfx(df, ccy):
     # Fetch FX conversion rates to base currency
     base_currency = ccy  # Set your base currency here
@@ -281,11 +284,12 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 nans_lastPX_Ids = {
                     777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
                     781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
-                    783792696: portfolio_df[portfolio_df.ConID == 783792696]['Market Price'].values[0], # Gold cert
+                    # 783792696: portfolio_df[portfolio_df.ConID == 783792696]['Market Price'].values[0], # Gold cert
                     780326845: 27.04,
+                    245092953: 430,
+                    28812380:  110000, # MBT
                     230947546:0.9375,
                     #76792991: portfolio_df[portfolio_df.ConID == 76792991]['Market Price'].values[0], # TSLA
-                    245092953: portfolio_df[portfolio_df.ConID == 245092953]['Market Price'].values[0], #BYD
                     777325382: portfolio_df[portfolio_df.ConID == 777325382]['Market Price'].values[0], #MUV2 cert
                     783797628: portfolio_df[portfolio_df.ConID == 783797628]['Market Price'].values[0], # INDUcert
                    }
@@ -379,7 +383,7 @@ def positionsHistPrices(df, durationStr, barSizeSetting):
         ib.sleep(1)  # Allow time to fetch market data
 
         # Convert the historical data to a pandas DataFrame
-        ts_df = util.df(bars)
+        ts_df = pd.DataFrame(bars)
 
         # Extract only the date and close price
         ts_df.set_index('date', inplace=True)

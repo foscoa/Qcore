@@ -1,4 +1,4 @@
-from ib_insync import IB, util
+from ib_async import IB
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -6,7 +6,7 @@ import win32com.client as win32
 
 # Connect to IBKR Gateway or TWS
 ib = IB()
-ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
+ib.connect('127.0.0.1', 7496, clientId=1)
 
 # === Fetch Open Positions ===
 

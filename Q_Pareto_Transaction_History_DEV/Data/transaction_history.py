@@ -6,7 +6,7 @@ import numpy as np
     Returns a cleaned and aggregated DataFrame.
     """
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05232025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05302025.csv"
 nav_path = "Q_Pareto_Transaction_History_DEV/Data/NAV_in_base_FA.csv"
 
 # Read transaction history CSV file
