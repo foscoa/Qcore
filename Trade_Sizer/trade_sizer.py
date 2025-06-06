@@ -1,7 +1,7 @@
 import asyncio
 import pandas as pd
 from ib_async import IB, Contract
-from utils.candle_plot import plot_candles
+from utils.utils import plot_candles
 import plotly.io as pio
 
 # Replace with your actual IBKR contract ID

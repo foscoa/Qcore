@@ -10,7 +10,7 @@ import pytz
 ib = IB()
 ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05302025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06062025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -250,8 +250,8 @@ def addBaseCCYfx(df, ccy):
             historical_data = ib.reqHistoricalData(
                 fx_contract,
                 endDateTime='',
-                durationStr='1 D',  # 1 Day of historical data
-                barSizeSetting='5 mins',  # 5-minute bars
+                durationStr='10 D',  # 1 Day of historical data
+                barSizeSetting='1 day',  # 5-minute bars
                 whatToShow='MIDPOINT',  # MIDPOINT gives the average bid/ask price
                 useRTH=False,  # Use regular trading hours
                 formatDate=1  # Format the date as a string
@@ -270,8 +270,10 @@ def addBaseCCYfx(df, ccy):
     df['FX Rate to Base'] = df['Currency'].map(fx_rates)
 
     return df
+#risk_df = addBaseCCYfx(risk_df, 'EUR')
 
-risk_df = addBaseCCYfx(risk_df, 'EUR')
+fx_dict = {'EUR':1, 'USD':1.1397}
+risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
 
 # contracts for Money market purposes
 contracts_MM = [11625311, 74991935, 281534370, 301467983, 568953593]
@@ -282,16 +284,18 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {
-                    777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
-                    781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
+                    784075605: portfolio_df[portfolio_df.ConID == 784075605]['Market Price'].values[0], # AUS cert,
+                    781998501: 2, # SAP cert
+                    781998486: portfolio_df[portfolio_df.ConID == 781998486]['Market Price'].values[0],
+                    789379516: portfolio_df[portfolio_df.ConID == 789379516]['Market Price'].values[0],
                     # 783792696: portfolio_df[portfolio_df.ConID == 783792696]['Market Price'].values[0], # Gold cert
                     780326845: 27.04,
                     245092953: 430,
-                    28812380:  110000, # MBT
+                    747131352: portfolio_df[portfolio_df.ConID == 747131352]['Market Price'].values[0],
+                    783030638: portfolio_df[portfolio_df.ConID == 783030638]['Market Price'].values[0],
                     230947546:0.9375,
-                    #76792991: portfolio_df[portfolio_df.ConID == 76792991]['Market Price'].values[0], # TSLA
+                    731454279: portfolio_df[portfolio_df.ConID == 731454279]['Market Price'].values[0], # real estate
                     777325382: portfolio_df[portfolio_df.ConID == 777325382]['Market Price'].values[0], #MUV2 cert
-                    783797628: portfolio_df[portfolio_df.ConID == 783797628]['Market Price'].values[0], # INDUcert
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -513,7 +517,7 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  # 642484880, # PL
+                  656780482, # gold
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
@@ -521,8 +525,8 @@ for conid in risk_df['ConID'].unique():
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
 
         # open and working orders have the same quantity
-        if conid == 642484880:
-            permIDs = [1103816496, 1103816497]
+        if conid == 656780482:
+            permIDs = [314572944, 314572945]
             open_sub_df = sub_df.query('PermID not in @permIDs')
             working_sub_df = sub_df.query('PermID in @permIDs')
 
@@ -563,16 +567,19 @@ for conid in risk_df['ConID'].unique():
                 open_since = np.abs((conid_rlzd_pnl.DateTime_clean.min() - datetime.today()).days)
             else:
                 entry_date = datetime.now(timezone.utc)
-                for fill in orders_df.query('ConID == @conid').Fills.values[0]:
-                    if entry_date > fill.execution.time:
-                        entry_date = fill.execution.time
+                if conid != 784075605:
+                    for fill in orders_df.query('ConID == @conid').Fills.values[0]:
+                        if entry_date > fill.execution.time:
+                            entry_date = fill.execution.time
+                else:
+                    entry_date = datetime.today()
                 entry_date = pd.Timestamp(entry_date.astimezone(pytz.timezone("Europe/Zurich")))
                 open_since = (datetime.now(pytz.timezone('Europe/Zurich')) - entry_date).days
 
 
             unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] / fx
 
-            stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
+            stops = sub_df[sub_df['Order Type'].isin(['STP', 'STP LMT'])]  # get rid of taking profit orders
 
             if not stops.empty:  # there are stops
                 if open_position > 0:  # long

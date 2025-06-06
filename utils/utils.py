@@ -1,6 +1,8 @@
 import pandas as pd
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+import pandas as pd
+from ib_async import IB, Contract
 
 def plot_candles(df,
                  title,
@@ -108,4 +110,42 @@ def plot_candles(df,
     fig.update_yaxes(title_text="Volume", row=2, col=1)
 
     return fig
+
+# "C:\\Users\\FoscoAntognini\\Documents\\Qcore\\SABER\\CL.csv"
+
+def IBKR_download_OHLC(CONTRACT_ID, durationStr= '1 Y', barSizeSetting= '1 day'):
+
+    # Connect to IBKR Gateway or TWS
+    ib = IB()
+    ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
+
+    conid = int(CONTRACT_ID)
+    contract = ib.qualifyContracts(Contract(conId=conid))[0]
+
+
+    # Request historical data
+    bars = ib.reqHistoricalData(
+        contract,
+        endDateTime='',  # '' means the latest available data
+        durationStr=durationStr,  # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
+        barSizeSetting=barSizeSetting,  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
+        whatToShow='TRADES',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
+        useRTH=True,  # Regular Trading Hours only
+        formatDate=1
+    )
+    ib.sleep(1)  # Allow time to fetch market data
+
+    # Convert the historical data to a pandas DataFrame
+    ts_df = pd.DataFrame(bars)
+
+    ib.disconnect()
+
+    # Extract only the date and close price
+    ts_df['date'] = pd.to_datetime(ts_df['date'],utc=True)
+    ts_df.set_index('date', inplace=True)
+
+    return ts_df
+
+
+
 

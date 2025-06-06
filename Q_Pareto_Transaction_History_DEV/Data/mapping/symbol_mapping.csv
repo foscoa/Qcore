@@ -3,6 +3,7 @@ ZT,2Y T-Note,Rates
 EUR,Euro/Usd,Forex
 MXP,Mexican Peso,Forex
 GBP.CHF,GBP.CHF,Forex
+6EU5,Euro,Forex
 DAX,DAX,Eqty Idx
 YM,Dow Jones,Eqty Idx
 RY,Euro/Yen,Forex
@@ -46,6 +47,7 @@ CT,Cotton No.2,Comdty
 CTZ5,Cotton No.2,Comdty
 TOPX,TOPIX (JPY),Eqty Idx
 CL,Crude Oil,Comdty
+CLQ5,Crude Oil,Comdty
 FTMIB,FTSE MIB,Eqty Idx
 L,Loews Corp,Equity
 ZM,Soybean Meal,Comdty
@@ -160,6 +162,7 @@ EUR.NOK,EUR.NOK,Forex
 EUR.NZD,EUR.NZD,Forex
 EUR.SEK,EUR.SEK,Forex
 EUR.SGD,EUR.SGD,Forex
+ETHM5,Ethereum,Crypto
 FBT,First Trust Arca Biotech ETF,Eqty Idx
 FDAX DEC 24,DAX,Eqty Idx
 FDAX DEC 23,DAX,Eqty Idx
@@ -182,6 +185,7 @@ FGBL 20240606 M,Euro Bund 10Y,Rates
 FGBL 20240906 M,Euro Bund 10Y,Rates
 FGBL 20241206 M,Euro Bund 10Y,Rates
 FGBS 20241206 M,Euro Schatz 2Y,Rates
+FGBL 20250908 M,Euro Bund 10Y,Rates
 FSMI JUN 24,SMI,Eqty Idx
 FSMI MAR 24,SMI,Eqty Idx
 FSMX 20240621 M,MDAX,Eqty Idx
@@ -208,6 +212,7 @@ ICLN,IShares Global Clean Energy,Eqty Idx
 IBBn,IShares Biotech ETF,Eqty Idx
 IYT,IShares US Transportation ETF,Eqty Idx
 VK3TWJ,Call Turbo-Opt. on Dow Jones,Eqty Idx
+VK35F6,Call Turbo-Opt. on AUDUSD,Forex
 JNJn,Johnson and Johnson,Equity
 KCK4,Coffee C,Comdty
 KCN4,Coffee C,Comdty
@@ -216,6 +221,7 @@ KCN5,Coffee C,Comdty
 KC,Coffee C,Comdty
 KE   DEC 23,Hard Red Winter Wheat,Comdty
 KEN4,Hard Red Winter Wheat,Comdty
+KEN5,Hard Red Winter Wheat,Comdty
 KRE, SPDR S&P Regional Banking,Eqty Idx
 LEJ4,Live Cattle,Comdty
 LEM4,Live Cattle,Comdty
@@ -236,6 +242,7 @@ MESZ4,Micro E-mini S&P500,Eqty Idx
 METAn,Meta,Equity
 MGCQ3,Micro Gold,Comdty
 MGCZ4,Micro Gold,Comdty
+MGCQ5,Micro Gold,Comdty
 MMEU4,MSCI Emergin Markets,Eqty Idx
 MNQM3,Micro E-mini NASDAQ 100,Eqty Idx
 MNQM4,Micro E-mini NASDAQ 100,Eqty Idx
@@ -295,7 +302,9 @@ RTYZ4,E-mini Russell 2000,Eqty Idx
 RTYM5,E-mini Russell 2000,Eqty Idx
 RYZ3,EUR.JPY,Forex
 SAPd,SAP,Equity
-VK29L7,SAP,Equity
+VK29L7,Call Turbo-Option on SAP,Equity
+VK29L2,Call Turbo-Option on SAP,Equity
+VK5PSN,Call Turbo-Option on SAP,Equity
 SBH4,Sugar No.11,Comdty
 SBK4,Sugar No.11,Comdty
 SBV4,Sugar No.11,Comdty
@@ -312,6 +321,8 @@ SQn,Block Inc,Equity
 TLTn,IShares 20Y+ Treasury,Rates
 TSLAn,Tesla Inc,Equity
 TSLA,Tesla Inc,Equity
+TSLA  250718C00340000,Call on Tesla Inc (JUL 340),Equity
+SEZL  250718P00100000,Put on Sezzle Inc (Jul 100),Equity
 TWLOn,Twilio Inc,Equity
 UCU24,SGX USD Chinese Renminbi (CNH),Forex
 UGA,UNITED STATES GAS FUND,Comdty

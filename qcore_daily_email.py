@@ -6,9 +6,9 @@ import win32com.client as win32
 
 #### TO MODIFY #########################################################################################################
 
-daily_PnL = 1769  # EUR, from IBKR
-est_MTD = +1.67     # previous day, % from Paul's daily estimate
-est_YTD = -0.23     # previous day, % from Paul's daily estimate
+daily_PnL = 256  # EUR, from IBKR
+est_MTD = +0.14    # previous day, % from Paul's daily estimate
+est_YTD = -0.07     # previous day, % from Paul's daily estimate
 
 ########################################################################################################################
 
@@ -54,8 +54,8 @@ def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
         "Feb": "-1.56%",
         "Mar": "+0.81%",
         "Apr": "-0.24%",
-        "May": curr_MTD + "*",
-        "Jun": "",
+        "May": "+1.79%*",
+        "Jun": curr_MTD + "*",
         "Jul": "",
         "Aug": "",
         "Sep": "",
