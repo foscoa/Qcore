@@ -10,7 +10,7 @@ from scipy.stats import gaussian_kde
 from math import floor
 import plotly.graph_objects as go
 
-# Define the file path
+# Define the file pathes
 file_path_transaction_history = "Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv"
 file_path_transaction_history_AMC = 'Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/aggregated_transaction_history_AMC.csv'
 file_path_NAV = 'Q_Pareto_Transaction_History_DEV/Data/NAV_in_base_FA.csv'

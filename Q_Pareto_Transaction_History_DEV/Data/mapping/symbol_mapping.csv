@@ -13,6 +13,7 @@ GBP,Gbp/Usd,Forex
 6BM5,Gbp/Usd,Forex
 6SM5,Chf/Usd,Forex
 DX,Dollar Index,Forex
+DXU5,Dollar Index,Forex
 BMW,BMW,Equity
 KE,KC HRW Wheat,Comdty
 SB,Sugar No. 11,Comdty
@@ -51,6 +52,7 @@ CLQ5,Crude Oil,Comdty
 FTMIB,FTSE MIB,Eqty Idx
 L,Loews Corp,Equity
 ZM,Soybean Meal,Comdty
+FXXP JUN 25,Stoxx 600,Eqty Idx
 ZMZ5,Soybean Meal,Comdty
 ZF,5Y T-Note,Rates
 SRG,SNAM SPA,Equity
@@ -301,10 +303,12 @@ RTYU4,E-mini Russell 2000,Eqty Idx
 RTYZ4,E-mini Russell 2000,Eqty Idx
 RTYM5,E-mini Russell 2000,Eqty Idx
 RYZ3,EUR.JPY,Forex
+RYU5,EUR.JPY,Forex
 SAPd,SAP,Equity
 VK29L7,Call Turbo-Option on SAP,Equity
 VK29L2,Call Turbo-Option on SAP,Equity
 VK5PSN,Call Turbo-Option on SAP,Equity
+VK55VS,Call Turbo-Option on Shopify,Equity
 SBH4,Sugar No.11,Comdty
 SBK4,Sugar No.11,Comdty
 SBV4,Sugar No.11,Comdty

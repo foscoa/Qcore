@@ -6,7 +6,7 @@ import numpy as np
     Returns a cleaned and aggregated DataFrame.
     """
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06062025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06122025.csv"
 nav_path = "Q_Pareto_Transaction_History_DEV/Data/NAV_in_base_FA.csv"
 
 # Read transaction history CSV file
@@ -174,4 +174,4 @@ aggregated_positions_df['TradeDuration'] = aggregated_positions_df['TradeDuratio
 
 
 aggregated_positions_df.to_csv("Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history.csv")
-aggregated_positions_df.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/transaction_history/aggregated_transaction_history.csv")
+#aggregated_positions_df.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/transaction_history/aggregated_transaction_history.csv")

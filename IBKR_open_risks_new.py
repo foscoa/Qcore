@@ -10,7 +10,7 @@ import pytz
 ib = IB()
 ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06062025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06122025.csv"
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -270,13 +270,13 @@ def addBaseCCYfx(df, ccy):
     df['FX Rate to Base'] = df['Currency'].map(fx_rates)
 
     return df
-#risk_df = addBaseCCYfx(risk_df, 'EUR')
+risk_df = addBaseCCYfx(risk_df, 'EUR')
 
-fx_dict = {'EUR':1, 'USD':1.1397}
-risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
+#fx_dict = {'EUR':1, 'USD':1.1397}
+#risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
 
 # contracts for Money market purposes
-contracts_MM = [11625311, 74991935, 281534370, 301467983, 568953593]
+contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
@@ -284,17 +284,16 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {
-                    784075605: portfolio_df[portfolio_df.ConID == 784075605]['Market Price'].values[0], # AUS cert,
                     781998501: 2, # SAP cert
                     781998486: portfolio_df[portfolio_df.ConID == 781998486]['Market Price'].values[0],
                     789379516: portfolio_df[portfolio_df.ConID == 789379516]['Market Price'].values[0],
-                    # 783792696: portfolio_df[portfolio_df.ConID == 783792696]['Market Price'].values[0], # Gold cert
+                    790670204: portfolio_df[portfolio_df.ConID == 790670204]['Market Price'].values[0], # SHOP
                     780326845: 27.04,
+                    784075605:1,
                     245092953: 430,
                     747131352: portfolio_df[portfolio_df.ConID == 747131352]['Market Price'].values[0],
                     783030638: portfolio_df[portfolio_df.ConID == 783030638]['Market Price'].values[0],
                     230947546:0.9375,
-                    731454279: portfolio_df[portfolio_df.ConID == 731454279]['Market Price'].values[0], # real estate
                     777325382: portfolio_df[portfolio_df.ConID == 777325382]['Market Price'].values[0], #MUV2 cert
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
@@ -495,7 +494,7 @@ df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 for conid in risk_df['ConID'].unique():
 
     flag_filledANDcanc = risk_df.copy().query('ConID == @conid and (Status != "Cancelled" and Status != "Filled")').empty
-    flag_notOpen = conid not in positions_df.ConID
+    flag_notOpen = str(conid) in positions_df.ConID.astype(str)
 
     # adjust for prices quoted in USd (cents)
     if conid in contracts_quoted_USd.keys():
@@ -517,7 +516,6 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  656780482, # gold
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
@@ -798,8 +796,8 @@ last_risk = last_risk[['Status', 'Days Open', 'Currency', 'FX', 'Symbol', 'Local
        'ConID', 'Entry Date', 'NLV', 'Report Time']]
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
-last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
-
+# last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
+last_risk.to_csv("/Users/foscoantognini/Library/CloudStorage/OneDrive-SharedLibraries-QCOREAG/Q Pareto Trading - Documents/General/Apps/q_trading_app/Data/open_risks.csv")
 
 # Disconnect from IBKR
 ib.disconnect()
