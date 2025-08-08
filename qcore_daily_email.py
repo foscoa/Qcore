@@ -6,9 +6,10 @@ import win32com.client as win32
 
 #### TO MODIFY #########################################################################################################
 
-daily_PnL = 256  # EUR, from IBKR
-est_MTD = +0.14    # previous day, % from Paul's daily estimate
-est_YTD = -0.07     # previous day, % from Paul's daily estimate
+daily_PnL = +250 # EUR, from IBKR
+est_MTD = -0.38    # previous day, % from Paul's daily estimate
+est_YTD = +0.96 - est_MTD          # +1.33  # previous day, % from Paul's daily estimate
+pct_profits = 1
 
 ########################################################################################################################
 
@@ -25,14 +26,14 @@ sample_data = get_sample_data(file_path_open_risks)
 report_time = sample_data['Report Time'].unique()[0]
 NLV = sample_data['NLV'].unique()[0]
 
-curr_MTD = est_MTD/100 + daily_PnL/NLV
-curr_MTD = f"{curr_MTD:+.2%}"
+curr_MTD = (est_MTD/100 + daily_PnL/NLV)*pct_profits
+curr_YTD = est_YTD/100 + curr_MTD
 
-curr_YTD = est_YTD/100 + daily_PnL/NLV
+curr_MTD = f"{curr_MTD:+.2%}"
 curr_YTD = f"{curr_YTD:+.2%}"
 
 def generate_pnl_table(daily_PnL):
-    ret = f"{daily_PnL / NLV:+.2%}" + "*"
+    ret = f"{daily_PnL*pct_profits / NLV:+.2%}" + "*"
     color = "darkgreen" if daily_PnL > 0 else "darkred" if daily_PnL < 0 else "black"
 
     html = """
@@ -54,10 +55,10 @@ def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
         "Feb": "-1.56%",
         "Mar": "+0.81%",
         "Apr": "-0.24%",
-        "May": "+1.79%*",
-        "Jun": curr_MTD + "*",
-        "Jul": "",
-        "Aug": "",
+        "May": "+1.70%",
+        "Jun": "+1.88%",
+        "Jul": "-0.31%*",
+        "Aug": curr_MTD + "*",
         "Sep": "",
         "Oct": "",
         "Nov": "",
@@ -239,9 +240,9 @@ def send_outlook_email(subject, html_body, recipients):
 if __name__ == "__main__":
     body = generate_full_email_body()
 
-    subject = "📈 Q-PT Report - " + today + " | Daily PnL: " + f"{daily_PnL/NLV:+.2%}" + "*"
+    subject = "📈 Q-PT Report - " + today + " | Daily PnL: " + f"{daily_PnL*pct_profits/NLV:+.2%}" + "*"
     # recipients = "fosco.antognini@qcore.ch"  # <--- put real emails separated by ;
-    recipients = "rr@qcore.group>;jw@qcore.group>;sven.schmidt@qcore.group>;pc@qcore.group>;sunanda.thiyagarajah@qcore.fund>;norman.hartmann@qcore.fund>"
+    recipients = "rr@qcore.group>;jw@qcore.group>;pc@qcore.group>;sunanda.thiyagarajah@qcore.ch>;norman.hartmann@qcore.ch>; julian.maquieira@qcore.fund>"
 
     send_outlook_email(subject, body, recipients)
     print("Email sent successfully!")

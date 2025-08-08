@@ -12,15 +12,17 @@ ib.connect('127.0.0.1', 7496, clientId=1)
 
 from xml.etree import ElementTree
 
+account_id = 'U15721173'
 
 positions = ib.positions()
+filtered_positions = [p for p in positions if p.account == account_id]
+
 positions_data = []
 
-for pos in positions:
+for pos in filtered_positions:
     contract = pos.contract
     details = ib.reqContractDetails(contract)
     detail = details[0] if details else None
-
 
     positions_data.append({
         'ConID': contract.conId,
@@ -73,7 +75,7 @@ orders_df = pd.DataFrame(orders_data)
 orders_df = orders_df[~orders_df['Status'].isin(['Filled', 'Cancelled'])]
 
 # === Market Prices for Current Positions ===
-portfolio = ib.portfolio()
+portfolio = ib.portfolio(account=account_id)
 market_price_df = pd.DataFrame([{
     'ConID': pos.contract.conId,
     'Market Price': pos.marketPrice
@@ -91,7 +93,13 @@ contracts_with_stop = []
 for _, pos_row in positions_df.iterrows():
     conid = pos_row['ConID']
     curr_pos = pos_row['Position']
-    mkt_price = pos_row['Market Price']
+
+    mult = 1
+
+    if conid in[85012894, 532513462, 731009923]:
+        mult = 100
+
+    mkt_price = pos_row['Market Price']*mult
 
     sub_orders = orders_df[orders_df['ConID'] == conid]
 
@@ -101,9 +109,9 @@ for _, pos_row in positions_df.iterrows():
         continue
 
     if curr_pos > 0:
-        stops = sub_orders[~((sub_orders['Action'] == 'SELL') & (sub_orders['Limit Price'] > mkt_price))]
+        stops = sub_orders[((sub_orders['Action'] == 'SELL') & (sub_orders['Stop Price'] > 0) & (sub_orders['Stop Price'] < mkt_price))]
     else:
-        stops = sub_orders[~((sub_orders['Action'] == 'BUY') & (0 < sub_orders['Limit Price']) & (sub_orders['Limit Price'] < mkt_price))]
+        stops = sub_orders[((sub_orders['Action'] == 'BUY') & (sub_orders['Stop Price'] > mkt_price))]
 
     net_pos = curr_pos + (stops['Action'].map({'SELL': -1, 'BUY': 1}) * stops['Quantity']).sum()
 
@@ -258,7 +266,7 @@ else:
 
 
 mail = outlook.CreateItem(0)
-mail.To = 'fosco.antognini@qcore.ch; pc@qcore.group; nh@qcore.fund'
+mail.To = 'fosco.antognini@qcore.ch; pc@qcore.group; norman.hartmann@qcore.ch'
 mail.Subject = title
 mail.HTMLBody = html_body
 

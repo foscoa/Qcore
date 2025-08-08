@@ -1,15 +1,17 @@
-from ib_insync import *
+from ib_async import IB
+from ib_async.contract import Forex, Contract
 import pandas as pd
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 import pytz
 
 
 # Connect to IBKR Gateway or TWS
 ib = IB()
-ib.connect('127.0.0.1', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
+ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_05092025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06132025.csv"
+
 def get_realized_PnL(file_path):
     # Define the file path
 
@@ -25,7 +27,7 @@ def get_realized_PnL(file_path):
     clean_date = master_df.DateTime.str.replace(";", " ")
 
     # Convert to datetime in CET timezone
-    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format="%Y%m%d %H%M%S").dt.tz_localize(
+    master_df['DateTime_clean'] = pd.to_datetime(clean_date, format='mixed', errors='coerce').dt.tz_localize(
         'America/New_York').dt.tz_convert('Europe/Berlin').dt.tz_localize(None)
 
     # Sort by Time
@@ -151,7 +153,7 @@ def get_realized_PnL(file_path):
     return  open_filter_df
 open_rzld_pnl = get_realized_PnL(file_path=file_path)
 
-flag_update_corr = True
+flag_update_corr = False
 
 # Fetch open positions
 positions = ib.positions()
@@ -216,7 +218,9 @@ account_summary_df = pd.DataFrame([
     {'Tag': item.tag, 'Value': item.value, 'Currency': item.currency}
     for item in account_summary
 ])
+
 NLV = float(account_summary_df[account_summary_df['Tag'] == 'NetLiquidation'].Value.values[0])
+
 
 # Merge positions and orders on ConID, Symbol, SecType, Exchange, Currency, Multiplier
 risk_df = positions_df.merge(orders_df, on=['ConID', 'Symbol', 'Local Symbol',
@@ -227,8 +231,10 @@ symbol_mapping = pd.read_csv('Q_Pareto_Transaction_History_DEV/Data/mapping/symb
                              header=0,
                              index_col=0)
 
-risk_df['Name'] = risk_df.Symbol.map(symbol_mapping.name.to_dict())
-risk_df['Asset Class'] = risk_df.Symbol.map(symbol_mapping.assetClass.to_dict())
+risk_df['Name'] = risk_df['Local Symbol'].map(symbol_mapping['name'].to_dict())
+risk_df['Asset Class'] = risk_df['Local Symbol'].map(symbol_mapping.assetClass.to_dict())
+
+
 
 def addBaseCCYfx(df, ccy):
     # Fetch FX conversion rates to base currency
@@ -245,8 +251,8 @@ def addBaseCCYfx(df, ccy):
             historical_data = ib.reqHistoricalData(
                 fx_contract,
                 endDateTime='',
-                durationStr='1 D',  # 1 Day of historical data
-                barSizeSetting='5 mins',  # 5-minute bars
+                durationStr='10 D',  # 1 Day of historical data
+                barSizeSetting='1 day',  # 5-minute bars
                 whatToShow='MIDPOINT',  # MIDPOINT gives the average bid/ask price
                 useRTH=False,  # Use regular trading hours
                 formatDate=1  # Format the date as a string
@@ -265,11 +271,13 @@ def addBaseCCYfx(df, ccy):
     df['FX Rate to Base'] = df['Currency'].map(fx_rates)
 
     return df
-
 risk_df = addBaseCCYfx(risk_df, 'EUR')
 
+#fx_dict = {'EUR':1, 'USD':1.1397}
+#risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
+
 # contracts for Money market purposes
-contracts_MM = [11625311, 74991935, 281534370, 301467983, 568953593]
+contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
@@ -277,10 +285,17 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {
-                    777330797: portfolio_df[portfolio_df.ConID == 777330797]['Market Price'].values[0], # AUS cert,
-                    781998501: portfolio_df[portfolio_df.ConID == 781998501]['Market Price'].values[0], # SAP cert
-                    120550477: portfolio_df[portfolio_df.ConID == 120550477]['Market Price'].values[0], # BKR B
-                    780326845: portfolio_df[portfolio_df.ConID == 780326845]['Market Price'].values[0], # Gold cert
+                    781998501: 2, # SAP cert
+                    781998486: portfolio_df[portfolio_df.ConID == 781998486]['Market Price'].values[0],
+                    789379516: portfolio_df[portfolio_df.ConID == 789379516]['Market Price'].values[0],
+                    790670204: portfolio_df[portfolio_df.ConID == 790670204]['Market Price'].values[0], # SHOP
+                    780326845: 27.04,
+                    784075605:1,
+                    245092953: 430,
+                    747131352: portfolio_df[portfolio_df.ConID == 747131352]['Market Price'].values[0],
+                    783030638: portfolio_df[portfolio_df.ConID == 783030638]['Market Price'].values[0],
+                    230947546:0.9375,
+                    777325382: portfolio_df[portfolio_df.ConID == 777325382]['Market Price'].values[0], #MUV2 cert
                    }
 defect_ids = list(nans_lastPX_Ids.keys())
 
@@ -289,17 +304,24 @@ contracts_quoted_USd = {526262864: 100,
                         577421489: 100,
                         532513438: 100,
                         573366572: 100,
+                        606234321: 100, # Dec CT
                         703249626: 100, # HEV5
                         577421502: 100, # CT
+                        532513462: 100, #ZLZ5
                         725809839: 100, # Feeder Cattle
-                        577421487: 100  # Coffee "C"
+                        577421487: 100,  # Coffee "C"
+                        703249626: 100,
+                        725809839: 100,
+                        526262864: 100,
+                        #642484880: 100
+
 }
 
 # map CFDs conid with STK
 map_conid = {
-    120550477: Contract(secType='STK', conId=72063691, symbol='BRK B', exchange='SMART', primaryExchange='NYSE', currency='USD', localSymbol='BRK B', tradingClass='BRK B'),
-    230949979: Forex('USDCNH', conId=113342317, exchange='IDEALPRO', localSymbol='USD.CNH', tradingClass='USD.CNH'),
-    166176201: Contract(secType='STK', conId=166090175, symbol='BABA', exchange='SMART', primaryExchange='NYSE', currency='USD', localSymbol='BABA', tradingClass='BABA')
+    166176201: Contract(secType='STK', conId=166090175, symbol='BABA', exchange='SMART', primaryExchange='NYSE', currency='USD', localSymbol='BABA', tradingClass='BABA'),
+    76792991: Contract(secType='STK', conId=76792991, symbol='TSLA', exchange='SMART', primaryExchange='NASDAQ', currency='USD', localSymbol='TSLA', tradingClass='NMS'),
+    52170893: Contract(secType='STK', conId=52170893, symbol='ICLN', exchange='SMART', primaryExchange='NASDAQ', currency='USD', localSymbol='ICLN', tradingClass='NMS')
 }
 
 
@@ -365,7 +387,7 @@ def positionsHistPrices(df, durationStr, barSizeSetting):
         ib.sleep(1)  # Allow time to fetch market data
 
         # Convert the historical data to a pandas DataFrame
-        ts_df = util.df(bars)
+        ts_df = pd.DataFrame(bars)
 
         # Extract only the date and close price
         ts_df.set_index('date', inplace=True)
@@ -438,6 +460,8 @@ risk_df['Multiplier'] = risk_df.Multiplier.fillna(1)
 
 last_risk = pd.DataFrame(columns=[
         'Status',
+        'Entry Date',
+        'Days Open',
         'Currency',
         'FX',
         'Symbol',
@@ -471,7 +495,7 @@ df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
 for conid in risk_df['ConID'].unique():
 
     flag_filledANDcanc = risk_df.copy().query('ConID == @conid and (Status != "Cancelled" and Status != "Filled")').empty
-    flag_notOpen = conid not in positions_df.ConID
+    flag_notOpen = str(conid) not in positions_df.ConID.astype(str)
 
     # adjust for prices quoted in USd (cents)
     if conid in contracts_quoted_USd.keys():
@@ -493,7 +517,6 @@ for conid in risk_df['ConID'].unique():
     # hybrid orders
     hybrid_IDs = [#727764322, # GBS
                   # 304037456,  # CL
-                  # 672770480, # kiwi
                   ]
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
@@ -501,8 +524,8 @@ for conid in risk_df['ConID'].unique():
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
 
         # open and working orders have the same quantity
-        if conid == 672770480:
-            permIDs = [165041676, 165041675]
+        if conid == 656780482:
+            permIDs = [314572944, 314572945]
             open_sub_df = sub_df.query('PermID not in @permIDs')
             working_sub_df = sub_df.query('PermID in @permIDs')
 
@@ -527,6 +550,7 @@ for conid in risk_df['ConID'].unique():
 
             rlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0] / fx
 
+            # position was already open
             if conid in open_rzld_pnl.Conid.unique():
 
                 conid_rlzd_pnl = open_rzld_pnl.query('Conid == @conid')
@@ -537,9 +561,24 @@ for conid in risk_df['ConID'].unique():
                     last_exec = -1
                 rlzd_PnL += conid_rlzd_pnl.FifoPnlRealizedToBase.iloc[(last_exec+1):].sum()
 
+                # log entry date
+                entry_date = conid_rlzd_pnl.DateTime_clean.min()
+                open_since = np.abs((conid_rlzd_pnl.DateTime_clean.min() - datetime.today()).days)
+            else:
+                entry_date = datetime.now(timezone.utc)
+                if conid != 784075605:
+                    for fill in orders_df.query('ConID == @conid').Fills.values[0]:
+                        if entry_date > fill.execution.time:
+                            entry_date = fill.execution.time
+                else:
+                    entry_date = datetime.today()
+                entry_date = pd.Timestamp(entry_date.astimezone(pytz.timezone("Europe/Zurich")))
+                open_since = (datetime.now(pytz.timezone('Europe/Zurich')) - entry_date).days
+
+
             unrlzd_PnL = portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] / fx
 
-            stops = sub_df[sub_df['Order Type'] == 'STP']  # get rid of taking profit orders
+            stops = sub_df[sub_df['Order Type'].isin(['STP', 'STP LMT'])]  # get rid of taking profit orders
 
             if not stops.empty:  # there are stops
                 if open_position > 0:  # long
@@ -572,6 +611,8 @@ for conid in risk_df['ConID'].unique():
 
             new_row = pd.DataFrame(data={
                 'Status': [position_status],
+                'Entry Date': [entry_date],
+                'Days Open': [open_since],
                 'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
                 'FX': [fx],  # Scalar wrapped in list
                 'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
@@ -604,6 +645,8 @@ for conid in risk_df['ConID'].unique():
             exposure = np.nan
             rlzd_PnL = np.nan
             unrlzd_PnL = np.nan
+            entry_date = np.nan
+            open_since = np.nan
 
             groups = {k: v for k, v in sub_df.groupby('Quantity')}
 
@@ -648,6 +691,8 @@ for conid in risk_df['ConID'].unique():
 
                     new_row = pd.DataFrame(data={
                         'Status': [position_status],
+                        'Entry Date': [entry_date],
+                        'Days Open': [open_since],
                         'Currency': [stops.Currency.unique()[0]],  # Make sure it's a list
                         'FX': [fx],  # Scalar wrapped in list
                         'Symbol': [stops.Symbol.unique()[0]],  # Make sure it's a list
@@ -700,9 +745,13 @@ for conid in risk_df['ConID'].unique():
             position = 'CLOSED'
             risk = np.nan
             string_stops = np.nan
+            entry_date = np.nan
+            open_since = np.nan
 
             new_row = pd.DataFrame(data={
                 'Status': [position_status],
+                'Entry Date': [entry_date],
+                'Days Open': [open_since],
                 'Currency': [sub_df.Currency.unique()[0]],  # Make sure it's a list
                 'FX': [fx],  # Scalar wrapped in list
                 'Symbol': [sub_df.Symbol.unique()[0]],  # Make sure it's a list
@@ -740,16 +789,16 @@ last_risk['maxL/minP (EUR)'] = np.where(last_risk["Status"] != 'working',
 last_risk['maxL/minP (bps)'] = (last_risk['maxL/minP (EUR)']/NLV)*10000
 
 
-last_risk = last_risk[['Status', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Name',
+last_risk = last_risk[['Status', 'Days Open', 'Currency', 'FX', 'Symbol', 'Local Symbol', 'Name',
        'Asset Class', 'Position', 'Contracts', 'Risk (EUR)', 'Risk (bps)','maxL/minP (EUR)', 'maxL/minP (bps)',
        'Rlzd PnL (EUR)', 'Rlzd PnL (bps)', 'UnRlzdPnL(EUR)', 'UnRlzdPnL(bps)',
        'Tot PnL (EUR)', 'Tot PnL (bps)', 'Exposure (EUR)', 'Expos. (%)',
        'Stop or Trigger', 'ATR 30D', 'ATR 30D (%)', 'multiplier', 'Last Price',
-       'ConID', 'NLV', 'Report Time']]
+       'ConID', 'Entry Date', 'NLV', 'Report Time']]
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
 last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")
-
+# last_risk.to_csv("/Users/foscoantognini/Library/CloudStorage/OneDrive-SharedLibraries-QCOREAG/Q Pareto Trading - Documents/General/Apps/q_trading_app/Data/open_risks.csv")
 
 # Disconnect from IBKR
 ib.disconnect()

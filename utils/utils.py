@@ -112,6 +112,7 @@ def plot_candles(df,
     return fig
 
 # "C:\\Users\\FoscoAntognini\\Documents\\Qcore\\SABER\\CL.csv"
+#ID: 304037471
 
 def IBKR_download_OHLC(CONTRACT_ID, durationStr= '1 Y', barSizeSetting= '1 day'):
 
