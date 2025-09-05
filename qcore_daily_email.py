@@ -6,10 +6,10 @@ import win32com.client as win32
 
 #### TO MODIFY #########################################################################################################
 
-daily_PnL = +250 # EUR, from IBKR
-est_MTD = -0.38    # previous day, % from Paul's daily estimate
-est_YTD = +0.96 - est_MTD          # +1.33  # previous day, % from Paul's daily estimate
-pct_profits = 1
+daily_PnL = 5645 # EUR, from IBKR
+est_MTD = +0.09   # previous day, % from Paul's daily estimate
+est_YTD = +3.60        # +2.71 - est_MTD, YTF Aug: 3.60 # previous day, % from Paul's daily estimate
+
 
 ########################################################################################################################
 
@@ -26,14 +26,14 @@ sample_data = get_sample_data(file_path_open_risks)
 report_time = sample_data['Report Time'].unique()[0]
 NLV = sample_data['NLV'].unique()[0]
 
-curr_MTD = (est_MTD/100 + daily_PnL/NLV)*pct_profits
-curr_YTD = est_YTD/100 + curr_MTD
+curr_MTD = (est_MTD/100 + daily_PnL/NLV)
+curr_YTD = est_YTD/100  + curr_MTD
 
 curr_MTD = f"{curr_MTD:+.2%}"
 curr_YTD = f"{curr_YTD:+.2%}"
 
 def generate_pnl_table(daily_PnL):
-    ret = f"{daily_PnL*pct_profits / NLV:+.2%}" + "*"
+    ret = f"{daily_PnL / NLV:+.2%}" + "*"
     color = "darkgreen" if daily_PnL > 0 else "darkred" if daily_PnL < 0 else "black"
 
     html = """
@@ -57,9 +57,9 @@ def generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD):
         "Apr": "-0.24%",
         "May": "+1.70%",
         "Jun": "+1.88%",
-        "Jul": "-0.31%*",
-        "Aug": curr_MTD + "*",
-        "Sep": "",
+        "Jul": "-0.28%",
+        "Aug": "+2.29%*",
+        "Sep": curr_MTD + "*",
         "Oct": "",
         "Nov": "",
         "Dec": "",
@@ -201,7 +201,7 @@ def generate_full_email_body():
     html += generate_pnl_table(daily_PnL)
     html += generate_monthly_returns_table_horizontal(curr_MTD, curr_YTD)
     html += """
-        <p><i>*estimated on """ + report_time + """</i></p>
+        <p><i>*estimated on """ + report_time + ". Performance fees excluded for the current month." """</i></p>
         </body></html>
         """
     html += generate_fund_exposure_table(df=sample_data)
@@ -240,9 +240,9 @@ def send_outlook_email(subject, html_body, recipients):
 if __name__ == "__main__":
     body = generate_full_email_body()
 
-    subject = "📈 Q-PT Report - " + today + " | Daily PnL: " + f"{daily_PnL*pct_profits/NLV:+.2%}" + "*"
+    subject = "📈 Q-PT Report - " + today + " | Daily PnL: " + f"{daily_PnL/NLV:+.2%}" + "*"
     # recipients = "fosco.antognini@qcore.ch"  # <--- put real emails separated by ;
-    recipients = "rr@qcore.group>;jw@qcore.group>;pc@qcore.group>;sunanda.thiyagarajah@qcore.ch>;norman.hartmann@qcore.ch>; julian.maquieira@qcore.fund>"
+    recipients = "rr@qcore.group>;jw@qcore.group>;pc@qcore.group>;sunanda.thiyagarajah@qcore.ch>;norman.hartmann@qcore.ch>; julian.maquieira@qcore.fund>; tobias.widmer@qcore.fund>"
 
     send_outlook_email(subject, body, recipients)
     print("Email sent successfully!")

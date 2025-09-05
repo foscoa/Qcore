@@ -1,6 +1,7 @@
 ﻿symbol,name,assetClass
 ZT,2Y T-Note,Rates
 ZTU5,2Y T-Note,Rates
+ZTZ5,2Y T-Note,Rates
 160090005,Topix Index,Eqty Idx
 1810,Xiaomi Corp,Equity
 EUR,Euro/Usd,Forex
@@ -23,6 +24,7 @@ GBP,Gbp/Usd,Forex
 DX,Dollar Index,Forex
 DXU5,Dollar Index,Forex
 BMW,BMW,Equity
+RCX5,Robusta Coffee,Comdty
 KE,KC HRW Wheat,Comdty
 SB,Sugar No. 11,Comdty
 SXAP,STOXX 600 Auto,Eqty Idx
@@ -30,11 +32,18 @@ SGXNK,SGX Nikkei 225,Eqty Idx
 ZL,Soybean Oil,Comdty
 RS,Canola,Comdty
 RSX5,Canola,Comdty
+ZU5,FTSE 100,Eqty Idx
+GDX, Vaneck Gold Miners ETF,Comdty
+CZ5,Cocoa ICE,Comdty
+C,Cocoa ICE,Comdty
+MGCZ5,Micro Gold,Comdty
+FSXE 20250919 M,Euro Stoxx 50,Eqty Idx
 ZC,Corn,Comdty
 ZCZ4,Corn,Comdty
 ZCZ5,Corn,Comdty
 MNQ,Nasdaq 100,Eqty Idx
 MNQU5,Nasdaq 100,Eqty Idx
+NQU5,Nasdaq 100,Eqty Idx
 DBA,Invesco DB Agric.,Comdty
 ALV,Allianz,Equity
 D,Robusta Coffee,Comdty
@@ -173,6 +182,7 @@ DXZ3,US Dollar Index,Forex
 E7U4,Euro,Forex
 E7Z3,Euro,Forex
 E7U5,Euro,Forex
+E7,Euro,Forex
 IH6,3M Euribor,Rates
 BCI,ABRDN BBG ALL COMMODITY ETF,Comdty
 EBMH5,Milling Wheat Futures,Comdty
@@ -194,6 +204,7 @@ FDAX SEP 23,DAX,Eqty Idx
 FDAX SEP 24,DAX,Eqty Idx
 FDXM DEC 23,DAX,Eqty Idx
 FDXM SEP 24,DAX,Eqty Idx
+FDXM 20250919 M,DAX,Eqty Idx
 FDXS 20230915 M,DAX,Eqty Idx
 FESX DEC 23,EuroStoxx 50,Eqty Idx
 FESX JUN 23,EuroStoxx 50,Eqty Idx
@@ -269,6 +280,7 @@ M2KU3,Micro E-mini Russel 2000,Eqty Idx
 M2KU4,Micro E-mini Russel 2000,Eqty Idx
 M2KZ3,Micro E-mini Russel 2000,Eqty Idx
 M2KU5,Micro E-mini Russel 2000,Eqty Idx
+M2K,Micro E-mini Russel 2000,Eqty Idx
 M6JM3,E-micro USD/JPY,Forex
 MBTM3,Micro Bitcoin CME,Crypto
 MBTM5,Micro Bitcoin CME,Crypto
@@ -295,6 +307,10 @@ VK1FCX,Call Turbo-Option on Munich Re,Equity
 NQ,Micro E-mini NASDAQ 100,Eqty Idx
 MSFTn,Microsoft,Equity
 MYMZ4,Micro E-mini Dow Jones,Eqty Idx
+YMU5,E-mini Dow Jones,Eqty Idx
+CNU25,FTSE China A50,Eqty Idx
+EUR.PLN,EUR.PLN,Forex
+EUR.CNH,EUR.CNH,Forex
 NGN3,Natural Gas,Comdty
 NGN25,Natural Gas,Comdty
 NGQ25,Natural Gas,Comdty
@@ -302,7 +318,9 @@ NGU3,Natural Gas,Comdty
 NGV4,Natural Gas,Comdty
 NGX4,Natural Gas,Comdty
 NGZ3,Natural Gas,Comdty
+NG,Natural Gas,Comdty
 NKU23,Nikkei 225,Eqty Idx
+N225,Nikkei 225,Eqty Idx
 NKZ24,Nikkei 225,Eqty Idx
 NQH4,E-mini NASDAQ 100,Eqty Idx
 NQM4,E-mini NASDAQ 100,Eqty Idx
@@ -324,6 +342,7 @@ RBN4,RBOB Gasoline,Comdty
 RBU3,RBOB Gasoline,Comdty
 RBX3,RBOB Gasoline,Comdty
 RBQ5,RBOB Gasoline,Comdty
+RB,RBOB Gasoline,Comdty
 RCF4,Robusta Coffee,Comdty
 RCH4,Robusta Coffee,Comdty
 RCK4,Robusta Coffee,Comdty
@@ -359,6 +378,7 @@ SBV4,Sugar No.11,Comdty
 SEKM3,Swedish krona,Forex
 SX86P,Stoxx 600 Real Estate,Eqty Idx
 FSTL 20250620 M,Stoxx 600 Real Estate,Eqty Idx
+FSTL 20250919 M,Stoxx 600 Real Estate,Eqty Idx
 SIEd,Siemens AG,Equity
 SIN3,Silver,Comdty
 SIU5,Silver,Comdty
@@ -368,11 +388,14 @@ SLV,IShares Silver Trust,Comdty
 SQn,Block Inc,Equity
 TLTn,IShares 20Y+ Treasury,Rates
 TW.l,Taylor Wimpey PLC,Equity
+TW,Taylor Wimpey PLC,Equity
 TSLAn,Tesla Inc,Equity
 TSLA,Tesla Inc,Equity
 TSLA  250718C00340000,Call on Tesla Inc (JUL 340),Equity
 SEZL  250718P00100000,Put on Sezzle Inc (Jul 100),Equity
+SEZL,Put on Sezzle Inc (Jul 100),Equity
 TWLOn,Twilio Inc,Equity
+HHIU5,Hang Seng China Enterprise,Eqty Idx
 UCU24,SGX USD Chinese Renminbi (CNH),Forex
 UGA,UNITED STATES GAS FUND,Comdty
 USD.CAD,USD.CAD,Forex
@@ -388,6 +411,8 @@ WQ3,White Sugar,Comdty
 WV3,White Sugar,Comdty
 WZ3,White Sugar,Comdty
 WZ5,White Sugar,Comdty
+WV5,White Sugar,Comdty
+W,White Sugar,Comdty
 XLE,Energy Select Sector ETF,Eqty Idx
 XOMn,Exxon Mobil,Equity
 XAUUSD, Put Turbo-Option on Gold,Comdty

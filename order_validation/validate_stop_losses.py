@@ -266,7 +266,7 @@ else:
 
 
 mail = outlook.CreateItem(0)
-mail.To = 'fosco.antognini@qcore.ch; pc@qcore.group; norman.hartmann@qcore.ch'
+mail.To = 'fosco.antognini@qcore.ch; pc@qcore.group; norman.hartmann@qcore.ch; tobias.widmer@qcore.fund'
 mail.Subject = title
 mail.HTMLBody = html_body
 

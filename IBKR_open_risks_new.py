@@ -12,7 +12,7 @@ ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper tradi
 
 account = ib.managedAccounts()[0]  # Get your account name
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_08082025.csv"
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_09042025.csv"
 
 def get_realized_PnL(file_path):
     # Define the file path
@@ -299,7 +299,7 @@ risk_df = addBaseCCYfx(risk_df, 'EUR')
 #risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
 
 # contracts for Money market purposes
-contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593, 586729438, 795884981,498854160, 40678422]
+contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593, 586729438, 795884981,498854160, 40678422, 17356972, 58666491]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
@@ -307,14 +307,15 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {
-                    # 781998486: portfolio_df[portfolio_df.ConID == 781998486]['Market Price'].values[0],
+                    230947667: 8.33, #EURCNH
                     134771127: portfolio_df[portfolio_df.ConID == 134771127]['Market Price'].values[0], # GDX
-                    747131352: 0.68,
+                    481698071: portfolio_df[portfolio_df.ConID == 481698071]['Market Price'].values[0], #COPX
+                    230947650:4.2249, #EURPLN
                     783030638: 0.01,
                     230947627: 11.87,
                     230949943: 87.70,
                     230949979: 7.16,
-                    709538051: 2827
+                    134770990: 92.20, # VNQ
                    }
 
 defect_ids = list(nans_lastPX_Ids.keys())
@@ -552,16 +553,15 @@ for conid in risk_df['ConID'].unique():
     sub_df_iter = [sub_df]
 
     # hybrid orders
-    hybrid_IDs = [# 765497533 # GBS
-                  ]
+    hybrid_IDs = [] #730283056
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
         open_sub_df = sub_df[(sub_df.Quantity.isna()) | (sub_df.Quantity == open_q)]
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
 
         # open and working orders have the same quantity
-        if conid == 765497533:
-            permIDs = [1645181408, 1645181410]
+        if conid == 730283056:
+            permIDs = [45793312, 45793310]
             open_sub_df = sub_df.query('PermID not in @permIDs')
             working_sub_df = sub_df.query('PermID in @permIDs')
 
@@ -602,7 +602,7 @@ for conid in risk_df['ConID'].unique():
                 open_since = np.abs((conid_rlzd_pnl.DateTime_clean.min() - datetime.today()).days)
             else:
                 entry_date = datetime.now(timezone.utc)
-                if conid != 784075605:
+                if conid not in [17356972, 767183041]:
                     for fill in orders_df.query('ConID == @conid').Fills.values[0]:
                         if entry_date > fill.execution.time:
                             entry_date = fill.execution.time

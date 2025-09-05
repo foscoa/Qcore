@@ -937,4 +937,4 @@ def update_chart(selected_year):
 # Run server
 if __name__ == '__main__':
     # app.run(debug=False, port=8050)
-    app.run(host='0.0.0.0', port=8068, debug=False)
+    app.run(host='0.0.0.0', port=8072, debug=False)
