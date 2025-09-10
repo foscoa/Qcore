@@ -19,6 +19,7 @@ asst_path = os.path.dirname(os.path.abspath(__name__)) + '/Q_Pareto_Transaction_
 file_path_corr_matrix= "Q_Pareto_Transaction_History_DEV/Data/corr_matrix.csv"
 file_path_corr_matrix_ass= "Q_Pareto_Transaction_History_DEV/Data/corr_matrix_ass.csv"
 file_path_manual_entries = 'Q_Pareto_Transaction_History_DEV/Data/aggregated_transaction_history_manual_entries.xls'
+file_path_2022_stats = 'Q_Pareto_Transaction_History_DEV/Data/AMC_transaction_history/2022_stats/2022_stats.csv'
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True, assets_folder=asst_path)
@@ -29,59 +30,6 @@ app.title = "Q - PT Trading App"
 def get_sample_data(file_path):
     return pd.read_csv(file_path, index_col=0)
 
-sample_data = get_sample_data(file_path_open_risks)
-
-report_time = sample_data['Report Time'].unique()[0]
-NLV = sample_data['NLV'].unique()[0]
-
-sample_data.drop(['Report Time', 'NLV'], axis=1, inplace=True)
-
-
-def get_number_positions(df):
-    nr_positions = df["Status"].value_counts().to_dict()
-    if 'working' not in nr_positions.keys():
-        nr_positions['working'] = 0
-
-    if 'open' not in nr_positions.keys():
-        nr_positions['open'] = 0
-    return nr_positions
-
-def plot_corr_matrix():
-
-    corr_matrix = pd.read_csv(file_path_corr_matrix, index_col=0).round(2).transpose()
-
-    # Create Heatmap
-    fig = ff.create_annotated_heatmap(
-        z=corr_matrix.values,
-        x=list(corr_matrix.columns),
-        y=list(corr_matrix.index),
-        colorscale="RdBu_r",  # Use a valid Plotly colorscale
-        annotation_text=corr_matrix.values,
-        showscale=False,
-        zmin=-1,  # Set minimum value of color scale
-        zmax=1,  # Set maximum value of color scale
-        font_colors=["black"]  # Set annotation text color to black
-    )
-
-    # Improve Layout
-    fig.update_layout(
-        xaxis=dict(side="bottom"),
-        # width=480,
-        # height=400,
-        margin=dict(l=10, r=10, t=10, b=10),
-        paper_bgcolor="#f8f9fa",  # Background color of the entire figure
-        plot_bgcolor="#f8f9fa"  # Background color of the plot area
-    )
-
-    return fig
-
-def get_string_corr_ass():
-
-    corr_matrix_ass = pd.read_csv(file_path_corr_matrix_ass, index_col=False)
-
-    return ("Data as of " + corr_matrix_ass.report_time.values[0] + " | Time frame: " + corr_matrix_ass.durationStr.values[0] +
-            " | Granularity: " + corr_matrix_ass.barSizeSetting.values[0])
-
 def get_journal_data(file_path_transaction_history):
 
     aggregated_positions_df = pd.read_csv(file_path_transaction_history,
@@ -90,7 +38,7 @@ def get_journal_data(file_path_transaction_history):
     manual_entries = pd.read_excel(file_path_manual_entries
         , engine='xlrd')
 
-    # get rid of mone market trades
+    # get rid of money market trades
     order_IDs = list(manual_entries[manual_entries.Scope == 'money market'].IBOrderID)
     aggregated_positions_df = aggregated_positions_df.query('IBOrderID not in @order_IDs')
 
@@ -182,7 +130,155 @@ def get_journal_data(file_path_transaction_history):
     # Return the cleaned and aggregated DataFrame
     return aggregated_positions_df.sort_values(by="Last Exit Date", ascending=False)
 
-def plot_return_distribution(trans_hist):
+def perf_attribution(file_path_transaction_history):
+
+    aggregated_positions_df = pd.read_csv(file_path_transaction_history,
+                                             index_col=0)
+
+    manual_entries = pd.read_excel(file_path_manual_entries
+        , engine='xlrd')
+
+    trader = 'RR'
+
+    aggregated_positions_df['Trader'] = aggregated_positions_df.IBOrderID.map(
+        manual_entries[['IBOrderID', 'Trader']].set_index('IBOrderID').Trader.to_dict())
+
+    aggregated_positions_df = aggregated_positions_df.query('IBOrderID in @order_IDs')
+
+    # Read transaction history CSV file
+    df_nav = pd.read_csv(file_path_NAV)
+    df_nav.columns = df_nav.columns.str.replace("/", "_", regex=False)
+
+    # add PnL in basis points
+    df_nav["ReportDate"] = pd.to_datetime(df_nav["ReportDate"], format="%Y%m%d")
+
+    # Truncate time from FirstEntryDate to keep only the date part
+    aggregated_positions_df["FirstEntryDate"] = pd.to_datetime(aggregated_positions_df["FirstEntryDate"],
+                                                               errors='coerce')
+
+    aggregated_positions_df["EntryDate_D"] = aggregated_positions_df["FirstEntryDate"].dt.floor("D")
+
+    # Step 2: Merge the dataframes on the date
+    aggregated_positions_df = aggregated_positions_df.merge(
+        df_nav[["ReportDate", "Total"]],
+        left_on="EntryDate_D",
+        right_on="ReportDate",
+        how="left"
+    )
+
+    aggregated_positions_df['FifoPnlRealizedToBaseBps'] = (
+                                                                      aggregated_positions_df.FifoPnlRealizedToBase / aggregated_positions_df.Total) * 10000
+
+    aggregated_positions_df['Change(%)'] = ((
+                                                        aggregated_positions_df.AvgClosePrice / aggregated_positions_df.AvgOpenPrice) - 1) * 100
+
+    # Rename columns for clarity
+    aggregated_positions_df.rename(columns={
+        'CurrencyPrimary': 'CCY',
+        'FXRateToBase': 'FX',
+        'AssetClass': 'Instr.',
+        'TradePrice': 'Trade Price',
+        'FifoPnlRealizedToBase': 'Real.PnL(EUR)',
+        'NotionalToBase': 'Notional(EUR)',
+        'FirstEntryDate': 'First Entry Date',
+        'LastExitDate': 'Last Exit Date',
+        'AvgClosePrice': 'ExitPrice(wAvg)',
+        'AvgOpenPrice': 'EntryPrice(wAvg)',
+        'TradeDuration': 'Trade Duration',
+        'AssetClass': 'Asset Class',
+        'Total': 'NAV at Entry',
+        'FifoPnlRealizedToBaseBps': 'Real.PnL(bps)',
+        'Multiplier': 'Mult.',
+
+    }, inplace=True)
+
+    # reorder the columns
+    aggregated_positions_df = aggregated_positions_df[[
+        "Last Exit Date",
+        "First Entry Date",
+        "Trade Duration",
+        "Name",
+        "Description",
+        "Asset Class",
+        "CCY",
+        "FX",
+        "Position",
+        "Quantity",
+        "Notional(EUR)",
+        "Real.PnL(EUR)",
+        "Real.PnL(bps)",
+        "EntryPrice(wAvg)",
+        "ExitPrice(wAvg)",
+        "Change(%)",
+        # "Open_CloseIndicator",
+        "Mult.",
+        "Instr.",
+        "Symbol",
+        "Exchange",
+        "NAV at Entry",
+        # "IBOrderID",
+        "Seconds",
+        "Conid"
+    ]]
+
+    aggregated_positions_df.to_csv("C:\\Users\\FoscoAntognini\\Documents\\a.csv")
+
+
+sample_data = get_sample_data(file_path_open_risks)
+
+report_time = sample_data['Report Time'].unique()[0]
+NLV = sample_data['NLV'].unique()[0]
+
+sample_data.drop(['Report Time', 'NLV', 'Daily Contribution (bps)'], axis=1, inplace=True)
+available_years = pd.to_datetime(get_journal_data(file_path_transaction_history)['Last Exit Date']).dt.year.unique()
+available_years = np.insert(available_years.astype(object), 0, "Since Inception")
+
+def get_number_positions(df):
+    nr_positions = df["Status"].value_counts().to_dict()
+    if 'working' not in nr_positions.keys():
+        nr_positions['working'] = 0
+
+    if 'open' not in nr_positions.keys():
+        nr_positions['open'] = 0
+    return nr_positions
+
+def plot_corr_matrix():
+
+    corr_matrix = pd.read_csv(file_path_corr_matrix, index_col=0).round(2).transpose()
+
+    # Create Heatmap
+    fig = ff.create_annotated_heatmap(
+        z=corr_matrix.values,
+        x=list(corr_matrix.columns),
+        y=list(corr_matrix.index),
+        colorscale="RdBu_r",  # Use a valid Plotly colorscale
+        annotation_text=corr_matrix.values,
+        showscale=False,
+        zmin=-1,  # Set minimum value of color scale
+        zmax=1,  # Set maximum value of color scale
+        font_colors=["black"]  # Set annotation text color to black
+    )
+
+    # Improve Layout
+    fig.update_layout(
+        xaxis=dict(side="bottom"),
+        # width=480,
+        # height=400,
+        margin=dict(l=10, r=10, t=10, b=10),
+        paper_bgcolor="#f8f9fa",  # Background color of the entire figure
+        plot_bgcolor="#f8f9fa"  # Background color of the plot area
+    )
+
+    return fig
+
+def get_string_corr_ass():
+
+    corr_matrix_ass = pd.read_csv(file_path_corr_matrix_ass, index_col=False)
+
+    return ("Data as of " + corr_matrix_ass.report_time.values[0] + " | Time frame: " + corr_matrix_ass.durationStr.values[0] +
+            " | Granularity: " + corr_matrix_ass.barSizeSetting.values[0])
+
+def plot_return_distribution(trans_hist, year_string):
     # Plot
     # Set fixed bin width to 1.5k EUR
     bin_width = 5
@@ -254,7 +350,7 @@ def plot_return_distribution(trans_hist):
     # Layout settings
     fig.update_layout(
         title=dict(
-            text="PnL Distribution (bps)",
+            text="PnL Distribution (bps) - " + year_string,
             x=0.0,
             font=dict(
                 size=15,  # You can adjust the font size
@@ -321,12 +417,46 @@ def butterfly_PnL_plot(trans_hist):
 
     ###
 
-def butterfly_PnL_plot(file_path):
+def butterfly_contr_plot(file_path):
 
-    df = get_sample_data(file_path_open_risks)
+    df = get_sample_data(file_path)
 
     df.dropna(subset=['Daily Contribution (bps)'], inplace=True)
 
+    grouped = df.groupby('Name')['Daily Contribution (bps)'].sum().sort_values(ascending=False)
+
+    # Step 2: Create butterfly chart
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        x=grouped.values,
+        y=grouped.index,
+        orientation='h',
+        marker_color=['#A8E6A1' if x >= 0 else '#F7B7B7' for x in grouped.values],
+        text=[str(int(x)) for x in grouped.values],  # Rounded integer labels
+        textposition='outside',  # Show labels outside the bar ends
+        insidetextanchor='start',  # Ensures alignment
+        cliponaxis=False  # Allows text to overflow beyond axis
+    ))
+
+    fig.update_layout(
+        xaxis_title='PnL EUR',
+        yaxis=dict(autorange="reversed"),  # Highest PnL at the top
+        bargap=0.3,
+        showlegend=False
+    )
+
+    fig.update_layout(
+        barmode='overlay',
+        xaxis_title="Contribution (bps)",
+        template="plotly_white",
+        margin=dict(l=20, r=20, t=25, b=20),
+        # height=500,
+        paper_bgcolor="#f8f9fa",  # Background color of the entire figure
+        plot_bgcolor="#f8f9fa"  # Background color of the plot area
+    )
+
+    return fig
 
 def get_statistics():
     # transaction history
@@ -334,6 +464,22 @@ def get_statistics():
 
     # Ensure date column is datetime
     trans_hist['Date'] = pd.to_datetime(trans_hist['First Entry Date'])  # Adjust column name if needed
+
+    # ADDING 2022 data
+    trans_hist_22 = pd.read_csv(file_path_2022_stats)
+    trans_hist_22['Seconds'] = (pd.to_datetime(trans_hist_22['Date Closed'], format='%m/%d/%Y') - \
+                                pd.to_datetime(trans_hist_22['Execution Date'], format='%m/%d/%Y'))
+
+    trans_hist_22['Seconds'] = trans_hist_22['Seconds'].dt.total_seconds()
+
+    trans_hist_22['Real.PnL(bps)'] = trans_hist_22['Realised EUR PnL']/trans_hist_22['AUM']*10000
+    trans_hist_22['Real.PnL(EUR)'] = trans_hist_22['Realised EUR PnL']
+
+    trans_hist_22['Date'] = pd.to_datetime(trans_hist_22['Date Closed'], format='%m/%d/%Y')
+
+    trans_hist = pd.concat([trans_hist[['Date', 'Real.PnL(bps)', 'Real.PnL(EUR)','Seconds']],
+                            trans_hist_22[['Date', 'Real.PnL(bps)', 'Real.PnL(EUR)', 'Seconds']]])
+
 
     def get_stats(df):
         if df.empty:
@@ -387,6 +533,7 @@ def get_statistics():
 
     # Get stats for each period
     stats = {
+        "2022": get_stats(trans_hist[trans_hist['Date'].dt.year == 2022]),
         "2023": get_stats(trans_hist[trans_hist['Date'].dt.year == 2023]),
         "2024": get_stats(trans_hist[trans_hist['Date'].dt.year == 2024]),
         "2025": get_stats(trans_hist[trans_hist['Date'].dt.year == 2025]),
@@ -522,6 +669,7 @@ def render_content(tab):
             }),
 
             html.H3("Position Details",
+
                     style={
                             "marginBottom": "10px",
                             "color": "#12365a",
@@ -601,20 +749,33 @@ def render_content(tab):
             html.H4("Jan-F // Feb-G // Mar-H  // Apr-J  // May-K  // Jun-M  // Jul-N  // Aug-Q  // Sep-U  // Oct-V  // Nov-X  // Dec-Z",
                     style={"color": "darkgray"}),
 
-            html.H3("Correlation Matrix Heatmap",  style={
+            # html.H3("Correlation Matrix Heatmap",  style={
+            #         "marginBottom": "10px",
+            #         "color": "#12365a",
+            #         "fontSize": "20px"
+            #     }),
+            #
+            # html.P(get_string_corr_ass(), style={
+            #     "fontSize": "12px",
+            #     "fontStyle": "italic",
+            #     "color": "#7f8c8d",
+            #     "marginBottom": "8px"
+            # }),
+
+            html.H3("Daily Contribution per Position",  style={
                     "marginBottom": "10px",
                     "color": "#12365a",
                     "fontSize": "20px"
                 }),
 
-            html.P(get_string_corr_ass(), style={
+            html.P("CASH and money market trades not included",style={
                 "fontSize": "12px",
                 "fontStyle": "italic",
                 "color": "#7f8c8d",
                 "marginBottom": "8px"
             }),
 
-            dcc.Graph(figure=plot_corr_matrix(),  style={'width': '50%'})  # Render heatmap
+            dcc.Graph(figure=butterfly_contr_plot(file_path=file_path_open_risks),  style={'width': '50%'})  # Render heatmap
         ])
     elif tab == 'journal':
         df = get_journal_data(file_path_transaction_history)
@@ -742,15 +903,38 @@ def render_content(tab):
             ),
             html.Br(),
             html.Br(),
-            dcc.Graph(figure=plot_return_distribution(get_journal_data(file_path_transaction_history)),
-                      style={'width': '900px', 'height': '450px'}),
+            dcc.Dropdown(
+                id='year-dropdown',
+                options=[{'label': str(year), 'value': year} for year in available_years],
+                value=available_years[0]
+            ),
+            html.Br(),
+            dcc.Graph(figure=plot_return_distribution(get_journal_data(file_path_transaction_history), "Since Inception"),
+                      style={'width': '900px', 'height': '450px'},
+                      id='pnl_distribution'),
 
             html.Br(),
             dcc.Graph(figure=butterfly_PnL_plot(get_journal_data(file_path_transaction_history)),
                       style={'width': '500px', 'height': '300px'})
         ])
 
+@app.callback(
+    Output('pnl_distribution', 'figure'),
+    Input('year-dropdown', 'value')
+)
+def update_chart(selected_year):
+
+    if selected_year == 'Since Inception':
+        filtered_df = get_journal_data(file_path_transaction_history)
+    else:
+        start = f"{selected_year}-01-01"
+        end = f"{int(selected_year) + 1}-01-01"  # Start of next year
+
+        filtered_df = get_journal_data(file_path_transaction_history).query("`Last Exit Date` >= @start and `Last Exit Date` < @end")
+
+    return plot_return_distribution(filtered_df, str(selected_year))
+
 # Run server
 if __name__ == '__main__':
     # app.run(debug=False, port=8050)
-    app.run(host='0.0.0.0', port=8051, debug=False)
+    app.run(host='0.0.0.0', port=8110, debug=False)

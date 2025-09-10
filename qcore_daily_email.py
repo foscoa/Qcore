@@ -6,8 +6,8 @@ import win32com.client as win32
 
 #### TO MODIFY #########################################################################################################
 
-daily_PnL = 5645 # EUR, from IBKR
-est_MTD = +0.09   # previous day, % from Paul's daily estimate
+daily_PnL = -2174 # EUR, from IBKR
+est_MTD = +0.24   # previous day, % from Paul's daily estimate
 est_YTD = +3.60        # +2.71 - est_MTD, YTF Aug: 3.60 # previous day, % from Paul's daily estimate
 
 

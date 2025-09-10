@@ -10,7 +10,9 @@ import pytz
 ib = IB()
 ib.connect('localhost', 7496, clientId=1)  # Use 4002 for IB Gateway paper trading
 
-file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_06132025.csv"
+account = ib.managedAccounts()[0]  # Get your account name
+
+file_path = "Q_Pareto_Transaction_History_DEV/Data/U15721173_TradeHistory_09102025.csv"
 
 def get_realized_PnL(file_path):
     # Define the file path
@@ -163,13 +165,16 @@ positions_df = pd.DataFrame([
         'Symbol': pos.contract.symbol,
         'Local Symbol': pos.contract.localSymbol,
         'SecType': pos.contract.secType,
-        'Exchange': pos.contract.exchange,
+        'Exchange': ' ',
         'Currency': pos.contract.currency,
         'Multiplier': pos.contract.multiplier if hasattr(pos.contract, 'multiplier') else 1,
         'Position': pos.position,
-        'Avg Cost': pos.avgCost
+        'Avg Cost': pos.avgCost,
+        # 'Daily PnL': ib.reqPnLSingle(account, '', pos.contract.conId)
     } for pos in positions
 ])
+
+
 
 # Request all open orders (manual + API)
 ib.reqAllOpenOrders()
@@ -204,9 +209,12 @@ portfolio_df = pd.DataFrame([
         'Unrealized PnL': pos.unrealizedPNL,
         'Realized PnL': pos.realizedPNL, # Directly from IBKR!
         'Market Price': pos.marketPrice,
+        #'Daily PnL': pos.marketPrice/yday_mkt_price
 
     } for pos in portfolio
 ])
+
+
 
 # print(portfolio_df)
 
@@ -220,6 +228,20 @@ account_summary_df = pd.DataFrame([
 ])
 
 NLV = float(account_summary_df[account_summary_df['Tag'] == 'NetLiquidation'].Value.values[0])
+
+# calculate daily PnL
+yday_mkt_price = pd.read_csv("Q_Pareto_Transaction_History_DEV/Data/YDAY_mkt_price_FA.csv",
+                             header=0,
+                             index_col=0)
+yday_mkt_price['PositionValueBase'] = yday_mkt_price.PositionValue * yday_mkt_price.FXRateToBase
+
+conid_to_price = yday_mkt_price.set_index('Conid')['MarkPrice']
+conid_to_mktval = yday_mkt_price.set_index('Conid')['PositionValueBase']
+
+portfolio_df['CloseT_1'] = portfolio_df['ConID'].map(conid_to_price.to_dict())
+portfolio_df['MktVal'] = portfolio_df['ConID'].map(conid_to_mktval.to_dict())
+portfolio_df['DailyPerf'] = portfolio_df['Market Price'] /portfolio_df['CloseT_1']-1
+portfolio_df['DailyContr'] = portfolio_df['MktVal']*portfolio_df['DailyPerf']/NLV*10000
 
 
 # Merge positions and orders on ConID, Symbol, SecType, Exchange, Currency, Multiplier
@@ -277,7 +299,7 @@ risk_df = addBaseCCYfx(risk_df, 'EUR')
 #risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
 
 # contracts for Money market purposes
-contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593]
+contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593, 586729438, 795884981,498854160, 40678422, 17356972, 58666491]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")
@@ -285,18 +307,21 @@ risk_df = risk_df.copy().query("Status not in 'Cancelled'")
 
 
 nans_lastPX_Ids = {
-                    781998501: 2, # SAP cert
-                    781998486: portfolio_df[portfolio_df.ConID == 781998486]['Market Price'].values[0],
-                    789379516: portfolio_df[portfolio_df.ConID == 789379516]['Market Price'].values[0],
-                    790670204: portfolio_df[portfolio_df.ConID == 790670204]['Market Price'].values[0], # SHOP
-                    780326845: 27.04,
-                    784075605:1,
-                    245092953: 430,
-                    747131352: portfolio_df[portfolio_df.ConID == 747131352]['Market Price'].values[0],
-                    783030638: portfolio_df[portfolio_df.ConID == 783030638]['Market Price'].values[0],
-                    230947546:0.9375,
-                    777325382: portfolio_df[portfolio_df.ConID == 777325382]['Market Price'].values[0], #MUV2 cert
+                    230947667: 8.33, #EURCNH
+                    134771127: portfolio_df[portfolio_df.ConID == 134771127]['Market Price'].values[0], # GDX
+                    481698071: portfolio_df[portfolio_df.ConID == 481698071]['Market Price'].values[0], #COPX
+                    230947650:4.2249, #EURPLN
+                    783030638: 0.01,
+                    230947627: 11.87,
+                    230949943: 87.70,
+                    230949979: 7.16,
+                    134770990: 92.20, # VNQ
+                    131067756: 347, #TSLA
+                    134770324: 92.04, #XLB
+                    134770382: 265.60, #XLK
+                    229484473: 172.73, #EURJPY
                    }
+
 defect_ids = list(nans_lastPX_Ids.keys())
 
 contracts_quoted_USd = {526262864: 100,
@@ -313,6 +338,10 @@ contracts_quoted_USd = {526262864: 100,
                         703249626: 100,
                         725809839: 100,
                         526262864: 100,
+                        731009923: 100, # Z
+                        532513373: 100, #ZCZ5
+                        85012894:100, #TW
+
                         #642484880: 100
 
 }
@@ -333,26 +362,38 @@ def addLastPX(df):
     for conid in df.copy().query("ConID not in @defect_ids")['ConID'].unique():
 
         conid = int(conid)
+
         if conid in map_conid.keys():
             contract = map_conid[conid]
+
+        elif conid in portfolio_df['ConID'].values:
+
+            # adjust for prices quoted in USd (cents)
+            if conid in contracts_quoted_USd.keys():
+                div = contracts_quoted_USd[conid]
+            else:
+                div = 1
+
+            LastPX[conid] = portfolio_df[portfolio_df['ConID'] == conid]['Market Price'].values[0]*div
+
         else:
             conid = int(conid)
-            exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
-            contract = Contract(conId=conid, exchange=exchange)
+            # exchange = df.query('ConID == @conid and Exchange != ""').Exchange.unique()[0]
+            contract = ib.qualifyContracts(Contract(conId=int(conid)))[0]
 
-        # Request historical data
-        bars = ib.reqHistoricalData(
-            contract,
-            endDateTime='',        # '' means the latest available data
-            durationStr='1 D',     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
-            barSizeSetting='1 min',  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
-            whatToShow='TRADES',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
-            useRTH=False,           # Regular Trading Hours only
-            formatDate=1
-        )
-        ib.sleep(1)  # Allow time to fetch market data
-        LastPX[conid] = bars[-1].close
-        LastPX_time[conid] = bars[-1].date
+            # Request historical data
+            bars = ib.reqHistoricalData(
+                contract,
+                endDateTime='',        # '' means the latest available data
+                durationStr='1 D',     # Duration: 1 day (options: '1 W', '1 M', '1 Y', etc.)
+                barSizeSetting='1 min',  # Bar size: 1 hour (options: '1 min', '5 min', etc.)
+                whatToShow='TRADES',  # Can be 'TRADES', 'BID', 'ASK', 'MIDPOINT'
+                useRTH=False,           # Regular Trading Hours only
+                formatDate=1
+            )
+            ib.sleep(1)  # Allow time to fetch market data
+            LastPX[conid] = bars[-1].close
+            LastPX_time[conid] = bars[-1].date
 
     # Apply FX conversion rates
     df['LastPX'] = df['ConID'].map(LastPX)
@@ -485,7 +526,8 @@ last_risk = pd.DataFrame(columns=[
         'ATR 30D (%)',
         'multiplier',  # Scalar wrapped in list
         'Last Price',  # Scalar wrapped in list
-        'ConID' # Scalar wrapped in list
+        'ConID', # Scalar wrapped in list
+        'Daily Contribution (bps)'
     ])
 
 df_open_rzld_pnl = open_rzld_pnl.groupby('Conid').FifoPnlRealizedToBase.sum()
@@ -515,17 +557,15 @@ for conid in risk_df['ConID'].unique():
     sub_df_iter = [sub_df]
 
     # hybrid orders
-    hybrid_IDs = [#727764322, # GBS
-                  # 304037456,  # CL
-                  ]
+    hybrid_IDs = [] #730283056
     if conid in hybrid_IDs:
         open_q = abs(sub_df.Position.dropna().values[0])
         open_sub_df = sub_df[(sub_df.Quantity.isna()) | (sub_df.Quantity == open_q)]
         working_sub_df = sub_df[(sub_df.Quantity.notna()) & (sub_df.Quantity != open_q)]
 
         # open and working orders have the same quantity
-        if conid == 656780482:
-            permIDs = [314572944, 314572945]
+        if conid == 730283056:
+            permIDs = [45793312, 45793310]
             open_sub_df = sub_df.query('PermID not in @permIDs')
             working_sub_df = sub_df.query('PermID in @permIDs')
 
@@ -566,7 +606,7 @@ for conid in risk_df['ConID'].unique():
                 open_since = np.abs((conid_rlzd_pnl.DateTime_clean.min() - datetime.today()).days)
             else:
                 entry_date = datetime.now(timezone.utc)
-                if conid != 784075605:
+                if conid not in [17356972, 767183041]:
                     for fill in orders_df.query('ConID == @conid').Fills.values[0]:
                         if entry_date > fill.execution.time:
                             entry_date = fill.execution.time
@@ -609,6 +649,15 @@ for conid in risk_df['ConID'].unique():
                     position = 'SHORT'
                 risk = exposure
 
+            if (portfolio_df.ConID == conid).sum() > 0:
+                daily_contr = portfolio_df[portfolio_df.ConID == conid]['DailyContr'].values[0]
+
+                if np.isnan(daily_contr):
+                    daily_contr = (portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] + \
+                                   portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0])*10000/NLV
+            else:
+                daily_contr = np.nan
+
             new_row = pd.DataFrame(data={
                 'Status': [position_status],
                 'Entry Date': [entry_date],
@@ -636,7 +685,8 @@ for conid in risk_df['ConID'].unique():
                 'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
                 'multiplier': [multiplier],  # Scalar wrapped in list
                 'Last Price': [lastPX],  # Scalar wrapped in list
-                'ConID': [conid]  # Scalar wrapped in list
+                'ConID': [conid],
+                'Daily Contribution (bps)': [daily_contr]
             })
 
             last_risk = pd.concat([last_risk, new_row], ignore_index=True)
@@ -647,6 +697,7 @@ for conid in risk_df['ConID'].unique():
             unrlzd_PnL = np.nan
             entry_date = np.nan
             open_since = np.nan
+            daily_contr = np.nan
 
             groups = {k: v for k, v in sub_df.groupby('Quantity')}
 
@@ -658,14 +709,22 @@ for conid in risk_df['ConID'].unique():
 
                 if not stops.empty:
                     if len(stops.Action.unique()) == 1:
-                        triggers = order[
-                            ((order['Status'] == 'Submitted') & (order['Order Type'].isin(['LMT', 'STP LMT', 'STP']))) | (
-                                        (order['Status'] == 'PreSubmitted') & (
-                                    order['Order Type'].isin(['STP LMT'])))].reset_index()
-                        if (triggers['Limit Price'] != 0).values:
+
+                        # BUY LMT case
+                        if conid == 323608988:
+                            triggers = order[(order['Order Type'] == 'LMT')].reset_index()
+                            stops = stops.reset_index()
                             type = 'Limit Price'
+
                         else:
-                            type = 'Stop Price'
+                            triggers = order[
+                                ((order['Status'] == 'Submitted') & (order['Order Type'].isin(['LMT', 'STP LMT', 'STP']))) | (
+                                            (order['Status'] == 'PreSubmitted') & (
+                                        order['Order Type'].isin(['STP LMT'])))].reset_index()
+                            if (triggers['Limit Price'] != 0).values:
+                                type = 'Limit Price'
+                            else:
+                                type = 'Stop Price'
 
                     else:
                         triggers = stops[stops.Action == stops.Action.unique()[0]].reset_index()
@@ -716,7 +775,8 @@ for conid in risk_df['ConID'].unique():
                         'ATR 30D (%)': [ATR_30.get(stops.Symbol.unique()[0], np.nan) / lastPX],
                         'multiplier': [multiplier],  # Scalar wrapped in list
                         'Last Price': [lastPX],  # Scalar wrapped in list
-                        'ConID': [conid]  # Scalar wrapped in list
+                        'ConID': [conid],
+                        'Daily Contribution (bps)': [daily_contr]# Scalar wrapped in list
                     })
 
                     last_risk = pd.concat([last_risk, new_row], ignore_index=True)
@@ -748,6 +808,33 @@ for conid in risk_df['ConID'].unique():
             entry_date = np.nan
             open_since = np.nan
 
+            if (portfolio_df.ConID == conid).sum() > 0:
+                daily_contr = portfolio_df[portfolio_df.ConID == conid]['DailyContr'].values[0]
+
+                if np.isnan(daily_contr):
+                    daily_contr = (portfolio_df[portfolio_df.ConID == conid]['Unrealized PnL'].values[0] + \
+                                   portfolio_df[portfolio_df.ConID == conid]['Realized PnL'].values[0]) * 10000 / NLV
+            else:
+
+                if (yday_mkt_price.Conid == conid).sum() > 0:
+
+                    avg_price = np.mean([
+                        fill.execution.price
+                        for fills_list in sub_df['Fills']
+                        for fill in fills_list
+                    ])
+
+                    ret = avg_price/yday_mkt_price[yday_mkt_price.Conid == conid].MarkPrice.values[0] - 1
+
+                    daily_contr = ret*yday_mkt_price[yday_mkt_price.Conid == conid].PositionValueBase.values[0]*10000/NLV
+
+                else:
+                    daily_contr = sum(
+                            fill.commissionReport.realizedPNL
+                            for fills_list in sub_df['Fills']
+                            for fill in fills_list
+                    )*10000/(fx*NLV)
+
             new_row = pd.DataFrame(data={
                 'Status': [position_status],
                 'Entry Date': [entry_date],
@@ -775,7 +862,8 @@ for conid in risk_df['ConID'].unique():
                 'ATR 30D (%)': [ATR_30.get(sub_df.Symbol.unique()[0], np.nan) / lastPX],
                 'multiplier': [multiplier],  # Scalar wrapped in list
                 'Last Price': [lastPX],  # Scalar wrapped in list
-                'ConID': [conid]  # Scalar wrapped in list
+                'ConID': [conid],
+                'Daily Contribution (bps)': [daily_contr]# Scalar wrapped in list
             })
 
             last_risk = pd.concat([last_risk, new_row], ignore_index=True)
@@ -794,7 +882,7 @@ last_risk = last_risk[['Status', 'Days Open', 'Currency', 'FX', 'Symbol', 'Local
        'Rlzd PnL (EUR)', 'Rlzd PnL (bps)', 'UnRlzdPnL(EUR)', 'UnRlzdPnL(bps)',
        'Tot PnL (EUR)', 'Tot PnL (bps)', 'Exposure (EUR)', 'Expos. (%)',
        'Stop or Trigger', 'ATR 30D', 'ATR 30D (%)', 'multiplier', 'Last Price',
-       'ConID', 'Entry Date', 'NLV', 'Report Time']]
+       'ConID', 'Entry Date', 'NLV', 'Report Time', 'Daily Contribution (bps)']]
 
 last_risk.to_csv("Q_Pareto_Transaction_History_DEV/Data/open_risks.csv")
 last_risk.to_csv("C:/Users/FoscoAntognini/DREI-R GROUP/QCORE AG - Documents/Investments/Trading App/PROD/open_risks/open_risks.csv")

@@ -21,6 +21,7 @@ GBP,Gbp/Usd,Forex
 6SM5,Chf/Usd,Forex
 6SU5,Chf/Usd,Forex
 6BU5,Gbp/Usd,Forex
+6BZ5,Gbp/Usd,Forex
 DX,Dollar Index,Forex
 DXU5,Dollar Index,Forex
 BMW,BMW,Equity
@@ -103,6 +104,7 @@ SQ,Block Inc.,Equity
 6JZ4,JPY/USD,Forex
 6JM4,JPY/USD,Forex
 EUR.NOK,EUR.NOK,Forex
+EUR.JPY,EUR.JPY,Forex
 RCN4,Robusta Coffee,Comdty
 168120019,E-mini Nikkei 225,Eqty Idx
 169030005,TOPIX (JPY),Eqty Idx
@@ -133,6 +135,7 @@ RCN4,Robusta Coffee,Comdty
 6MH4,Mexican peso,Forex
 6MZ3,Mexican peso,Forex
 6MZ4,Mexican peso,Forex
+6MU5,Mexican peso,Forex
 6SU4,Swiss franc,Forex
 6SZ4,Swiss franc,Forex
 AAPLn,Apple Inc,Equity
@@ -165,6 +168,7 @@ CLU3,Light Sweet Crude Oil,Comdty
 CLV4,Light Sweet Crude Oil,Comdty
 CLXn,Clorox,Equity
 CLZ3,Light Sweet Crude Oil,Comdty
+CLZ5,Light Sweet Crude Oil,Comdty
 COPX,Global X Copper Miners ETF,Comdty
 COSTn,Costco Wholesale Corp,Equity
 CPNG,Coupang,Equity
@@ -414,6 +418,8 @@ WZ5,White Sugar,Comdty
 WV5,White Sugar,Comdty
 W,White Sugar,Comdty
 XLE,Energy Select Sector ETF,Eqty Idx
+XLB,Materials Select Sector ETF,Eqty Idx
+XLK,Technology Select Sector ETF,Eqty Idx
 XOMn,Exxon Mobil,Equity
 XAUUSD, Put Turbo-Option on Gold,Comdty
 RIO,Rio Tinto,Equity
