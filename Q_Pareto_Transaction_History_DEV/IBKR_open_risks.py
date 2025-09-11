@@ -299,7 +299,7 @@ risk_df = addBaseCCYfx(risk_df, 'EUR')
 #risk_df['FX Rate to Base'] = risk_df['Currency'].map(fx_dict)
 
 # contracts for Money market purposes
-contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593, 586729438, 795884981,498854160, 40678422, 17356972, 58666491]
+contracts_MM = [11625311, 17356836, 74991935, 281534370, 301467983, 568953593, 586729438, 795884981,498854160, 40678422, 17356972, 58666491,604259007]
 risk_df = risk_df.copy().query("ConID not in @contracts_MM")
 
 risk_df = risk_df.copy().query("SecType not in 'CASH'")

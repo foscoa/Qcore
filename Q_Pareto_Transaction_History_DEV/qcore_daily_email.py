@@ -6,16 +6,15 @@ import win32com.client as win32
 
 #### TO MODIFY #########################################################################################################
 
-daily_PnL = -2174 # EUR, from IBKR
-est_MTD = +0.24   # previous day, % from Paul's daily estimate
+daily_PnL = 5122 # EUR, from IBKR
+est_MTD = +0.14   # previous day, % from Paul's daily estimate
 est_YTD = +3.60        # +2.71 - est_MTD, YTF Aug: 3.60 # previous day, % from Paul's daily estimate
-
 
 ########################################################################################################################
 
 today = datetime.today().strftime('%d %B %Y')
 
-file_path_open_risks = "Q_Pareto_Transaction_History_DEV/Data/open_risks.csv"
+file_path_open_risks = "Data/open_risks.csv"
 
 # Sample DataFrames
 def get_sample_data(file_path):
